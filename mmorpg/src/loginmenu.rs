@@ -10,9 +10,9 @@ pub struct ConnectionSettings {
     pub username: String,
 }
 
-pub struct LoginMenulugin;
+pub struct LoginMenuPlugin;
 
-impl Plugin for LoginMenulugin {
+impl Plugin for LoginMenuPlugin {
     fn build(&self, app: &mut App) {
         // Run iff in LoginMenu state
         app.init_resource::<ConnectionSettings>()
