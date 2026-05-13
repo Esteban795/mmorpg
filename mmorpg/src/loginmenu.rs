@@ -8,6 +8,7 @@ use crate::state::AppState;
 #[derive(Resource, Default)]
 pub struct ConnectionSettings {
     pub username: String,
+    pub password: String
 }
 
 pub struct LoginMenuPlugin;
@@ -47,11 +48,14 @@ fn menu_ui(
                 ui.label("Nom d'utilisateur :");
 
                 ui.add(egui::TextEdit::singleline(&mut settings.username).hint_text("Pseudo"));
+                ui.add_space(10.0);
+                ui.label("Mot de passe :");
+                ui.add(egui::TextEdit::singleline(&mut settings.password).hint_text("Mot de passe"));
 
                 ui.add_space(10.0);
 
                 if ui.button("Se Connecter").clicked() {
-                    if !settings.username.is_empty() {
+                    if !settings.username.is_empty() && !settings.password.is_empty() {
                         // CHANGE THIS TO ACTUALLY CONNECT TO THE SERVER
                         println!("Connexion de {}", settings.username);
                         next_state.set(AppState::InGame);
