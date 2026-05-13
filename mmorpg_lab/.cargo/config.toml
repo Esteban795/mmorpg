@@ -1,11 +1,6 @@
-[package]
-name = "mmorpg"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-bevy = { version = "0.18.1", features = ["dynamic_linking"] }
-bevy_egui = "0.39.1"
+# .cargo/config.toml
+[target.x86_64-pc-windows-msvc]
+linker = "rust-lld.exe"
 
 # Enable a small amount of optimization in the dev profile.
 [profile.dev]
