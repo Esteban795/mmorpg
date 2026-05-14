@@ -4,3 +4,10 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+axum = "0.8.9"
+serde = { version = "1.0.228", features = ["derive"] }
+tokio = { version = "1.52.3", features = ["full"] }
+shared ={ path = "../shared" }
+uuid = {version = "1.23.1", features = ["v4"] }
+redis = { version = "0.25", features = ["tokio-comp"] }
+serde_json = "1.0.149"
