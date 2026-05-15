@@ -5,6 +5,7 @@ use axum::{Router, routing::get, routing::post};
 use handlers::{health_handler, login_handler};
 use redis_pool::ApiState;
 
+
 #[tokio::main]
 async fn main() {
     println!("Starting gatekeeper...");
@@ -33,7 +34,12 @@ async fn main() {
 
     println!("API listening on http://{}", listen_addr);
 
-    if let Err(e) = axum::serve(listener, app).await {
+    if let Err(e) = axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .await
+    {
         eprintln!("Fatal error (server crashed ??) : {}", e);
     }
 }

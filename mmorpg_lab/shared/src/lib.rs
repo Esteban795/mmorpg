@@ -9,6 +9,10 @@ pub struct ServerInfo {
     pub ip: String,
     pub port: u16,
     pub zone: String,
+    pub num_players : u16,
+    pub capacity : u16,
+    pub lat : f64,
+    pub lon : f64,
 }
 
 
