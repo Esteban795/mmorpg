@@ -51,7 +51,9 @@ pub async fn get_servers(state: &ApiState) -> Result<Vec<ServerInfo>, RedisError
     for server_json in servers {
         match serde_json::from_str::<ServerInfo>(&server_json) {
             Ok(info) => {
-                server_infos.push(info);
+                if info.num_players < info.capacity {
+                    server_infos.push(info);
+                }
             }
             Err(e) => {
                 eprintln!("Ignoring malformed server entry in Redis : {}", e);
