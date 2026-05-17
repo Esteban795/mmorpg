@@ -7,34 +7,6 @@ pub struct ApiState {
     pub redis_conn: MultiplexedConnection,
 }
 
-// Multiplexed connection to avoid blocking other users when connecting a user
-pub async fn init_redis(redis_url: &str) -> Result<MultiplexedConnection, RedisError> {
-    let Ok(client) = Client::open(redis_url) else {
-        eprintln!(
-            "Error : could not create Redis client with URL '{}'",
-            redis_url
-        );
-        return Err(RedisError::from((
-            redis::ErrorKind::InvalidClientConfig,
-            "Invalid Redis URL",
-        )));
-    };
-
-    let Ok(conn) = client.get_multiplexed_async_connection().await else {
-        eprintln!("Error : could not connect to Redis at '{}'", redis_url);
-        eprintln!(
-            "Make sure Redis is running and accessible at '{}'",
-            redis_url
-        );
-        return Err(RedisError::from((
-            redis::ErrorKind::IoError,
-            "Could not connect to Redis",
-        )));
-    };
-
-    Ok(conn)
-}
-
 pub async fn get_servers(state: &ApiState) -> Result<Vec<ServerInfo>, RedisError> {
     let mut conn = state.redis_conn.clone();
 

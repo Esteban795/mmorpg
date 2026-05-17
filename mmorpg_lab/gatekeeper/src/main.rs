@@ -11,7 +11,7 @@ async fn main() {
     println!("Starting gatekeeper...");
 
     // Connect to Redis
-    let Ok(redis_conn) = redis_pool::init_redis("redis://127.0.0.1/").await else {
+    let Ok(redis_conn) = shared::init_redis("redis://127.0.0.1/").await else {
         eprintln!("Fatal error : could not connect to Redis");
         eprintln!("Make sure Redis is running and accessible at redis://127.0.0.1/");
         return;
