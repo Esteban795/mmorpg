@@ -16,7 +16,8 @@ def simulate_server(port):
             payload = {
                 "ip": "127.0.0.1",
                 "port": port,
-                "zone": "Canada",
+                "zone": "forêt_sombre",
+                "status": "available",
                 "num_players": 10,
                 "capacity": 100,
                 "lat": 48.4,
