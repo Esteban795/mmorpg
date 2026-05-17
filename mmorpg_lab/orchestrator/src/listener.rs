@@ -15,23 +15,24 @@ pub async fn heartbeat_listener(mut redis_conn: MultiplexedConnection) {
     loop {
         if let Ok((len, addr)) = socket.recv_from(&mut buf).await {
             match serde_json::from_slice::<ServerInfo>(&buf[..len]) {
+                Ok(info) => {
+                    let generated_id = format!("{}:{}", info.ip, info.port);
+                    let redis_key = format!("server:{}", generated_id);
+                    
+                    if let Ok(json_string) = serde_json::to_string(&info) {
 
-                Ok(server_info) => {
-                    
-                    //Generate the id by combining the IP and port, and store the server info in Redis with a TTL of 15 seconds (so it will be automatically removed if no heartbeat is received for 15 seconds).
-                    let server_id = format!("{}:{}", server_info.ip, server_info.port);
-                    let redis_key = format!("server:{}", server_id);
-                    
-                    if let Ok(json_string) = serde_json::to_string(&server_info) {
-                        let _: Result<(), _> = redis_conn.set_ex(&redis_key, json_string, 15).await;
-                        println!("Heartbeat updated for {}", redis_key);
+                        let _: Result<(), _> = redis_conn.hset(&redis_key,"data", json_string).await;
+                        
+                        // Set the TTL to 15 seconds
+                        let _: Result<(), _> = redis_conn.expire(&redis_key, 15).await;
+                        
+                        println!("Heartbeat updated for {} (Status: {})", redis_key, info.status);
                     }
                 }
                 Err(e) => {
-                    // This will print the exact reason it failed, plus the raw text it received
                     let raw_string = String::from_utf8_lossy(&buf[..len]);
                     eprintln!("Malformed heartbeat from {}. Error: {}", addr, e);
-                    eprintln!("Raw payload received: {}", raw_string);
+                    eprintln!("Raw payload: {}", raw_string);
                 }
             }
         }

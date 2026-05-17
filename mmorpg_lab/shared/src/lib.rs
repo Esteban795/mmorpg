@@ -12,6 +12,7 @@ pub struct ServerInfo {
     pub zone: String,
     pub num_players : u16,
     pub capacity : u16,
+    pub status: String,
     pub lat : f64,
     pub lon : f64,
     pub cpu_usage: f32,

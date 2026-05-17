@@ -19,28 +19,7 @@ pub async fn maintain_hot_servers(mut redis_conn: MultiplexedConnection) {
         //If we have less than HOT_SERVERS_MIN, we spawn new servers until we reach the minimum.
         ticker.tick().await;
 
-        let keys: Vec<String> = redis_conn.keys("server:*").await.unwrap_or_default();
-        let mut available_count = 0;
-        // Create a HashSet to track ports Redis knows are currently in use
-        let mut known_used_ports = HashSet::new();
-
-        if !keys.is_empty() {
-            let servers_json: Vec<String> = redis_conn.mget(&keys).await.unwrap_or_default();
-
-            for json_str in servers_json {
-                if let Ok(info) = serde_json::from_str::<ServerInfo>(&json_str) {
-
-                    known_used_ports.insert(info.port);
-
-                    let has_room = info.num_players < info.capacity;
-                    //let is_healthy = info.cpu_usage < 80.0;
-
-                    if has_room {
-                        available_count += 1;
-                    }
-                }
-            }
-        }
+        let available_count = count_available_servers(&mut redis_conn).await;
 
         println!("Cluster Status: {}/{} available servers.", available_count, HOT_SERVERS_MIN);
 
@@ -51,7 +30,7 @@ pub async fn maintain_hot_servers(mut redis_conn: MultiplexedConnection) {
             for _ in 0..servers_to_spawn {
                 
                 // Find the next genuinely free port
-                let free_port = find_free_port(&mut port_cursor, &known_used_ports);
+                let free_port = find_free_port(&mut port_cursor);
                 
                 // Spawn the server with the guaranteed free port
                 spawn_dedicated_server(free_port, "Canada").await;
@@ -60,19 +39,48 @@ pub async fn maintain_hot_servers(mut redis_conn: MultiplexedConnection) {
     }
 }
 
+// Scans Redis for all active servers, downloads their JSON from the "data" field, 
+// and counts how many are marked as "available".
+async fn count_available_servers(redis_conn: &mut MultiplexedConnection) -> usize {
+    let mut available = 0;
+    let mut server_keys = Vec::new();
+    
+    // SCAN for all server keys
+    {
+        let mut scan_iter = match redis_conn.scan_match::<_, String>("server:*").await {
+            Ok(iter) => iter,
+            Err(e) => {
+                eprintln!("Error scanning Redis for servers: {}", e);
+                return 0;
+            }
+        };
+    
+        while let Some(key) = scan_iter.next_item().await {
+            server_keys.push(key);
+        }
+    }
+
+    // HGET the "data" field and parse the JSON to get availability status
+    for key in server_keys {
+        if let Ok(server_json) = redis_conn.hget::<_, _, String>(&key, "data").await {
+            if let Ok(info) = serde_json::from_str::<ServerInfo>(&server_json) {
+                if info.status == "available" {
+                    available += 1;
+                }
+            }
+        }
+    }
+
+    available
+}
 
 // Helper function to scan for a free port safely. 
 // Go over the ports and ping them to see if they are actually free, instead of just assuming the next one is free.
-fn find_free_port(cursor: &mut u16, known_used_ports: &HashSet<u16>) -> u16 {
+fn find_free_port(cursor: &mut u16) -> u16 {
     loop {
         // Prevent it from going over the maximum allowed port limit
         if *cursor > 9000 {
             *cursor = 8001; // Wrap around and start searching from the beginning
-        }
-
-        if known_used_ports.contains(cursor) {
-            *cursor += 1;
-            continue;
         }
 
         let test_addr = format!("0.0.0.0:{}", *cursor);
