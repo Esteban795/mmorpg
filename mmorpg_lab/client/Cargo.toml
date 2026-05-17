@@ -8,3 +8,10 @@ bevy = { version = "0.18.1", features = ["dynamic_linking"] }
 bevy_egui = "0.39.1"
 serde = { version = "1.0.228", features = ["derive"] }
 
+# Network dependencies
+bevy_quinnet = { version = "0.20.0", features = ["client", "bincode-messages"] }
+postcard = { version = "1.0.0", features = ["alloc"] }
+
+# Local workspace dependencies
+shared = { path = "../shared" }
+
