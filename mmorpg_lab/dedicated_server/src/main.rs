@@ -147,16 +147,27 @@ fn send_heartbeat(
 ) {
     // Execute every 5 seconds while being called at 20Hz
     if timer.0.tick(time.delta()).just_finished() {
+        let current_players = registry.players.len() as u16;
+
+        // Détermination dynamique du statut
+        let status = if current_players >= config.max_players {
+            "full".to_string()
+        } else {
+            "online".to_string()
+        };
+
         let hb = ServerInfo {
             ip: config.ip.clone(),
             port: config.port,
             zone: config.zone.clone(),
             num_players: registry.players.len() as u16,
             capacity: config.max_players,
+            status,
             lat: 0.0,
             lon: 0.0,
+            cpu_usage: 0.0,
+            mem_usage: 0,
         };
-        // Might be needed to add a "status": "online", "full", "maintenance", etc... if we want to have the gatekeeper filter servers based on that
 
         match serde_json::to_string(&hb) {
             Ok(payload) => {
