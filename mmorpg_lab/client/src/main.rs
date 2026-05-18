@@ -1,3 +1,4 @@
+mod game;
 mod loginmenu;
 mod network;
 mod state;
@@ -17,6 +18,7 @@ fn main() {
         .add_plugins(LoginMenuPlugin)
         .add_plugins(EguiPlugin::default())
         .add_plugins(NetworkPlugin)
+        .add_plugins(game::GamePlugin)
         .init_state::<AppState>()
         .insert_state(AppState::LoginMenu)
         .run();

@@ -1,7 +1,7 @@
 use redis::{AsyncCommands, aio::MultiplexedConnection};
 use shared::ServerInfo;
-use std::time::Instant;
 use std::net::UdpSocket;
+use std::time::Instant;
 use tokio::time::{Duration, interval};
 
 //Settings for the spawner. Adjust as needed for testing or production.
@@ -32,7 +32,9 @@ pub async fn maintain_hot_servers(mut redis_conn: MultiplexedConnection) {
 
         println!(
             "Cluster Status: {} available, {} booting. Target: {}.",
-            available_count, pending_spawns.len(), HOT_SERVERS_MIN
+            available_count,
+            pending_spawns.len(),
+            HOT_SERVERS_MIN
         );
 
         if projected_count < HOT_SERVERS_MIN {
@@ -45,7 +47,7 @@ pub async fn maintain_hot_servers(mut redis_conn: MultiplexedConnection) {
 
                 // Spawn the server with the guaranteed free port
                 spawn_dedicated_server(free_port, "Canada").await;
-                
+
                 // Track this spawn so we don't spawn it again on the next tick
                 pending_spawns.push(now);
             }
@@ -122,10 +124,13 @@ async fn spawn_dedicated_server(port: u16, zone: &str) {
     match tokio::process::Command::new(&executable_path)
         .env("DS_PORT", port.to_string())
         .env("DS_ZONE", zone)
-        .env("DS_MAX_PLAYERS", "1")
-        .spawn() 
+        .env("DS_MAX_PLAYERS", "3")
+        .spawn()
     {
         Ok(_) => println!("Process started successfully."),
-        Err(e) => eprintln!("CRITICAL ERROR: Failed to launch server at '{}'. Error: {}", executable_path, e),
+        Err(e) => eprintln!(
+            "CRITICAL ERROR: Failed to launch server at '{}'. Error: {}",
+            executable_path, e
+        ),
     }
 }

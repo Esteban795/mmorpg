@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use bevy_quinnet::server::certificate::CertificateRetrievalMode;
 use bevy_quinnet::server::*;
 
-use shared::{ClientMessage, ServerInfo, ServerMessage};
+use shared::{ClientMessage, PlayerState, ServerInfo, ServerMessage};
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr, UdpSocket};
 use std::time::Duration;
@@ -25,9 +25,14 @@ pub struct HeartbeatSocket(UdpSocket);
 #[derive(Resource)]
 pub struct HeartbeatTimer(Timer);
 
+pub struct PlayerData {
+    pub username: String,
+    pub position: Vec2,
+}
+
 #[derive(Resource, Default)]
 pub struct PlayerRegistry {
-    pub players: HashMap<u64, String>, // maps the unique client ID to the player's username (client ID given by Quinnet)
+    pub players: HashMap<u64, PlayerData>, // maps the unique client ID to the player's username (client ID given by Quinnet)
 }
 
 fn main() {
@@ -80,7 +85,13 @@ fn main() {
         .add_systems(Startup, start_server)
         .add_systems(
             Update,
-            (handle_connections, handle_messages, send_heartbeat).chain(),
+            (
+                handle_connections,
+                handle_messages,
+                broadcast_aoi,
+                send_heartbeat,
+            )
+                .chain(),
         )
         .run();
 }
@@ -130,7 +141,13 @@ fn handle_messages(mut server: ResMut<QuinnetServer>, mut registry: ResMut<Playe
             match message {
                 ClientMessage::Join { username } => {
                     println!("Player '{}' (ID {}) joined the game!", username, client_id);
-                    registry.players.insert(client_id, username);
+                    registry.players.insert(
+                        client_id,
+                        PlayerData {
+                            username,
+                            position: Vec2::ZERO,
+                        },
+                    );
 
                     let _ = endpoint.send_message(
                         client_id,
@@ -139,8 +156,19 @@ fn handle_messages(mut server: ResMut<QuinnetServer>, mut registry: ResMut<Playe
                         },
                     );
                 }
-                ClientMessage::MoveInput { x: _, y: _ } => {
-                    // Pour l'AOI plus tard !
+                ClientMessage::MoveInput { x, y } => {
+                    if let Some(player) = registry.players.get_mut(&client_id) {
+                        // Speed = 200 pixels per second, with updates at 20Hz, so we move 10 pixels per tick in the input direction
+                        let speed_per_tick = 200.0 * (1.0 / 20.0);
+                        let direction = Vec2::new(x, y).normalize_or_zero();
+
+                        player.position += direction * speed_per_tick;
+
+                        // Walls at 400 pixels from the center in all directions
+                        player.position = player
+                            .position
+                            .clamp(Vec2::splat(-400.0), Vec2::splat(400.0));
+                    }
                 }
             }
         }
@@ -194,5 +222,33 @@ fn send_heartbeat(
             }
             Err(e) => eprintln!("Failed to serialize heartbeat: {}", e),
         }
+    }
+}
+
+// Area of interest (AOI) system : every tick, send each player a custom snapshot of all players that are within 400 pixels of them
+fn broadcast_aoi(mut server: ResMut<QuinnetServer>, registry: Res<PlayerRegistry>) {
+    let endpoint = server.endpoint_mut();
+    let camera_view_distance = 400.0; // AOI radius in pixels
+
+    for (client_id, player_data) in &registry.players {
+        let mut visible_players = Vec::new();
+
+        for (other_id, other_data) in &registry.players {
+            if player_data.position.distance(other_data.position) < camera_view_distance {
+                visible_players.push(PlayerState {
+                    id: *other_id,
+                    username: other_data.username.clone(),
+                    x: other_data.position.x,
+                    y: other_data.position.y,
+                });
+            }
+        }
+
+        let _ = endpoint.send_message(
+            *client_id,
+            ServerMessage::AOISnapshot {
+                players: visible_players,
+            },
+        );
     }
 }

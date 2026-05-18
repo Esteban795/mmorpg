@@ -81,14 +81,86 @@ fn handle_connection_events(
     }
 }
 
-fn handle_messages(mut client: ResMut<QuinnetClient>) {
+fn handle_messages(
+    mut client: ResMut<QuinnetClient>,
+    mut commands: Commands,
+    mut game_state: ResMut<crate::game::GameState>,
+    mut transforms: Query<&mut Transform>,
+) {
     let connection = client.connection_mut();
 
-    // Check for incoming messages from the server without blocking, on stream 0 (reliable ordered)
     while let Ok(Some(message)) = connection.receive_message::<ServerMessage>() {
         match message {
             ServerMessage::Welcome { player_id } => {
-                println!("CLIENT : Welcome reçu ! Mon ID est : {}", player_id);
+                println!("ID Local reçu: {}", player_id);
+                game_state.my_id = Some(player_id);
+            }
+            ServerMessage::AOISnapshot { players } => {
+                let mut current_frame_ids = Vec::new();
+
+                for p in players {
+                    current_frame_ids.push(p.id);
+
+                    if let Some(&entity) = game_state.spawned_players.get(&p.id) {
+                        // existing player in AOI, update position
+                        if let Ok(mut transform) = transforms.get_mut(entity) {
+                            transform.translation.x = p.x;
+                            transform.translation.y = p.y;
+                        }
+                    } else {
+                        // new player in AOI, spawn an entity for them
+                        let is_me = game_state.my_id == Some(p.id);
+                        let color = if is_me {
+                            Color::srgb(0.2, 0.2, 1.0)
+                        } else {
+                            Color::srgb(1.0, 0.2, 0.2)
+                        };
+
+                        // Display name truncated if too long
+                        let display_name = if p.username.len() > 10 {
+                            format!("{}...", &p.username[..8])
+                        } else {
+                            p.username
+                        };
+
+                        let entity = commands
+                            .spawn((
+                                Sprite {
+                                    color,
+                                    custom_size: Some(Vec2::new(30.0, 30.0)),
+                                    ..default()
+                                },
+                                Transform::from_xyz(p.x, p.y, 0.0),
+                                crate::game::PlayerComponent,
+                            ))
+                            .with_children(|parent| {
+                                // Display the player's username above their character
+                                parent.spawn((
+                                    Text2d::new(display_name),
+                                    TextFont {
+                                        font_size: 15.0,
+                                        ..default()
+                                    },
+                                    TextColor(Color::WHITE),
+                                    Transform::from_xyz(0.0, 25.0, 1.0),
+                                ));
+                            })
+                            .id();
+
+                        game_state.spawned_players.insert(p.id, entity);
+                    }
+                }
+
+                // Gestion of despawn of entities that are no longer in the AOI :
+                // If an entity in the HashMap is not in the current frame's list of player IDs, it is despawned and removed from the HashMap
+                game_state.spawned_players.retain(|&id, &mut entity| {
+                    if !current_frame_ids.contains(&id) {
+                        commands.entity(entity).despawn();
+                        false
+                    } else {
+                        true
+                    }
+                });
             }
         }
     }

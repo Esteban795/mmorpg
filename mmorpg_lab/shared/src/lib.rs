@@ -1,14 +1,10 @@
-use serde::{Deserialize, Serialize};
 use redis::{Client, RedisError, aio::MultiplexedConnection};
-
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ClientMessage {
     Join { username: String },
-    // We will use this later for the text-based AOI
+    // For the AOI, direction vector (x = -1 for right/y = -1 for down, 0 for no movement, x = +1 for left/y = +1 for up)
     MoveInput { x: f32, y: f32 },
 }
 
@@ -16,6 +12,7 @@ pub enum ClientMessage {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ServerMessage {
     Welcome { player_id: u64 },
+    AOISnapshot { players: Vec<PlayerState> },
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -85,13 +82,10 @@ pub struct SimpleServerInfo {
     pub zone: String,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct PlayerState {
+    pub id: u64,
+    pub username: String,
+    pub x: f32,
+    pub y: f32,
 }
