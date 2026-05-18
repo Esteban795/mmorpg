@@ -1,7 +1,7 @@
 use redis::{AsyncCommands, aio::MultiplexedConnection};
 use shared::ServerInfo;
+use std::time::Instant;
 use std::net::UdpSocket;
-//use tokio::process::Command;
 use tokio::time::{Duration, interval};
 
 //Settings for the spawner. Adjust as needed for testing or production.
@@ -15,21 +15,28 @@ pub async fn maintain_hot_servers(mut redis_conn: MultiplexedConnection) {
 
     let mut ticker = interval(Duration::from_secs(5));
     let mut port_cursor: u16 = 8001;
+    let mut pending_spawns: Vec<Instant> = Vec::new();
+    let boot_timeout = Duration::from_secs(20);
 
     loop {
         //We get all the servers from Redis and count how many are available (currently just "not full" but later we can use cpu usage healthiness too).
         //If we have less than HOT_SERVERS_MIN, we spawn new servers until we reach the minimum.
         ticker.tick().await;
 
+        // Clear out pending spawns that took too long (they probably crashed on boot)
+        let now = Instant::now();
+        pending_spawns.retain(|&spawn_time| now.duration_since(spawn_time) < boot_timeout);
+
         let available_count = count_available_servers(&mut redis_conn).await;
+        let projected_count = available_count + pending_spawns.len();
 
         println!(
-            "Cluster Status: {}/{} available servers.",
-            available_count, HOT_SERVERS_MIN
+            "Cluster Status: {} available, {} booting. Target: {}.",
+            available_count, pending_spawns.len(), HOT_SERVERS_MIN
         );
 
-        if available_count < HOT_SERVERS_MIN {
-            let servers_to_spawn = HOT_SERVERS_MIN - available_count;
+        if projected_count < HOT_SERVERS_MIN {
+            let servers_to_spawn = HOT_SERVERS_MIN - projected_count;
             println!("Need {} more servers. Spawning...", servers_to_spawn);
 
             for _ in 0..servers_to_spawn {
@@ -38,6 +45,9 @@ pub async fn maintain_hot_servers(mut redis_conn: MultiplexedConnection) {
 
                 // Spawn the server with the guaranteed free port
                 spawn_dedicated_server(free_port, "Canada").await;
+                
+                // Track this spawn so we don't spawn it again on the next tick
+                pending_spawns.push(now);
             }
         }
     }
@@ -101,21 +111,6 @@ fn find_free_port(cursor: &mut u16) -> u16 {
     }
 }
 
-/*
-async fn spawn_dedicated_server(port: u16, zone: &str) {
-    println!("Booting Bevy server on port {}", port);
-
-    let _ = tokio::process::Command::new("cargo")
-        .arg("run")
-        .arg("-p")
-        .arg("dedicated_server")
-        .env("DS_PORT", port.to_string())
-        .env("DS_ZONE", zone)
-        .env("DS_MAX_PLAYERS", "1")
-        .spawn();
-}
-        */
-
 async fn spawn_dedicated_server(port: u16, zone: &str) {
     println!("Booting Bevy server on port {} in zone {}", port, zone);
 
@@ -124,9 +119,13 @@ async fn spawn_dedicated_server(port: u16, zone: &str) {
         std::env::consts::EXE_SUFFIX
     );
 
-    let _ = tokio::process::Command::new(&executable_path)
+    match tokio::process::Command::new(&executable_path)
         .env("DS_PORT", port.to_string())
         .env("DS_ZONE", zone)
         .env("DS_MAX_PLAYERS", "1")
-        .spawn();
+        .spawn() 
+    {
+        Ok(_) => println!("Process started successfully."),
+        Err(e) => eprintln!("CRITICAL ERROR: Failed to launch server at '{}'. Error: {}", executable_path, e),
+    }
 }
