@@ -9,6 +9,11 @@ use std::net::{IpAddr, SocketAddr, UdpSocket};
 use std::time::Duration;
 use uuid::Uuid;
 
+const DEFAULT_DS_PORT: &str = "8001";
+const DEFAULT_ORCH_PORT: &str = "8000";
+const DEFAULT_ZONE: &str = "zone_A";
+const DEFAULT_MAX_PLAYERS: &str = "100";
+
 #[derive(Resource)]
 pub struct ServerConfig {
     pub id: String,
@@ -33,21 +38,21 @@ pub struct PlayerRegistry {
 fn main() {
     // get port and orchestrator address from environment variables, with defaults
     let port: u16 = std::env::var("DS_PORT")
-        .unwrap_or_else(|_| "8001".to_string())
+        .unwrap_or_else(|_| DEFAULT_DS_PORT.to_string())
         .parse()
         .expect("Invalid DS_PORT");
 
     let orchestrator_addr: SocketAddr = std::env::var("ORCH_ADDR")
-        .unwrap_or_else(|_| "127.0.0.1:8000".to_string())
+        .unwrap_or_else(|_| format!("127.0.0.1:{}", DEFAULT_ORCH_PORT))
         .parse()
         .expect("Invalid ORCH_ADDR");
 
     // get zone from environment variable, defaulting to "zone_A" if not set
-    let zone = std::env::var("DS_ZONE").unwrap_or_else(|_| "zone_A".to_string());
+    let zone = std::env::var("DS_ZONE").unwrap_or_else(|_| DEFAULT_ZONE.to_string());
 
     // get max players from environment variable, defaulting to 100 if not set
     let max_players: u16 = std::env::var("DS_MAX_PLAYERS")
-        .unwrap_or_else(|_| "100".to_string())
+        .unwrap_or_else(|_| DEFAULT_MAX_PLAYERS.to_string())
         .parse()
         .expect("Invalid MAX_PLAYERS");
 
