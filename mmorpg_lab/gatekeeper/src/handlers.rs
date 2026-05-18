@@ -2,6 +2,7 @@ use std::net::SocketAddr;
 
 use crate::ApiState;
 use crate::redis_pool::get_servers;
+use shared::{ErrorResponse, LoginRequest, LoginResponse, SimpleServerInfo};
 
 use axum::{
     Json,
@@ -32,32 +33,9 @@ fn calculate_distance(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
 }
 
 // ------------------- Data structure for Error response -------------------
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ErrorResponse {
-    pub error: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct SimpleServerInfo {
-    pub ip: String,
-    pub port: u16,
-    pub zone: String,
-}
 
 // ------------------- Login handler -------------------
 // Login with a username and password (might add stuff more stuff later)
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct LoginRequest {
-    pub username: String,
-    pub password: String,
-}
-
-// Response with the IP of the game server to connect to
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct LoginResponse {
-    pub player_uuid: String,
-    pub server: SimpleServerInfo,
-}
 
 pub async fn login_handler(
     state: State<ApiState>,
