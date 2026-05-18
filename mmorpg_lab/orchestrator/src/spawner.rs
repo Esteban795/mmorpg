@@ -1,7 +1,7 @@
 use redis::{AsyncCommands, aio::MultiplexedConnection};
 use shared::ServerInfo;
 use std::net::UdpSocket;
-use tokio::process::Command;
+//use tokio::process::Command;
 use tokio::time::{Duration, interval};
 
 //Settings for the spawner. Adjust as needed for testing or production.
@@ -101,6 +101,7 @@ fn find_free_port(cursor: &mut u16) -> u16 {
     }
 }
 
+/*
 async fn spawn_dedicated_server(port: u16, zone: &str) {
     println!("Booting Bevy server on port {}", port);
 
@@ -110,6 +111,22 @@ async fn spawn_dedicated_server(port: u16, zone: &str) {
         .arg("dedicated_server")
         .env("DS_PORT", port.to_string())
         .env("DS_ZONE", zone)
-        .env("DS_MAX_PLAYERS", "100")
+        .env("DS_MAX_PLAYERS", "1")
+        .spawn();
+}
+        */
+
+async fn spawn_dedicated_server(port: u16, zone: &str) {
+    println!("Booting Bevy server on port {} in zone {}", port, zone);
+
+    let executable_path = format!(
+        "./target/debug/dedicated_server{}",
+        std::env::consts::EXE_SUFFIX
+    );
+
+    let _ = tokio::process::Command::new(&executable_path)
+        .env("DS_PORT", port.to_string())
+        .env("DS_ZONE", zone)
+        .env("DS_MAX_PLAYERS", "1")
         .spawn();
 }

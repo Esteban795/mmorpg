@@ -12,7 +12,7 @@ futures-lite = "2.3"
 surf ="2.3"
 
 # Network dependencies
-bevy_quinnet = { version = "0.20.0", features = ["client", "bincode-messages"] }
+bevy_quinnet = { version = "0.20.0", features = ["server", "bincode-messages"] }
 postcard = { version = "1.0.0", features = ["alloc"] }
 
 # Local workspace dependencies

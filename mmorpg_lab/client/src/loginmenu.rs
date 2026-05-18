@@ -1,12 +1,11 @@
 use bevy::app::AppExit;
 use bevy::prelude::*;
-use bevy::tasks::{IoTaskPool, Task}; 
+use bevy::tasks::{IoTaskPool, Task};
 use bevy_egui::{EguiContexts, EguiPrimaryContextPass, egui};
 use futures_lite::future;
 
-use shared::{LoginRequest, LoginResponse};
 use crate::state::AppState;
-
+use shared::{LoginRequest, LoginResponse};
 
 // Bevy task to run the async login request without blocking main thread
 #[derive(Component)]
@@ -17,6 +16,7 @@ pub struct ConnectionSettings {
     pub username: String,
     pub password: String,
     pub error_message: Option<String>,
+    pub server_target: Option<(String, u16)>, // (IP, Port)
 }
 
 pub struct LoginMenuPlugin;
@@ -26,7 +26,7 @@ impl Plugin for LoginMenuPlugin {
         app.init_resource::<ConnectionSettings>()
             .add_systems(Startup, setup_camera.run_if(in_state(AppState::LoginMenu)))
             .add_systems(
-                EguiPrimaryContextPass, 
+                EguiPrimaryContextPass,
                 (menu_ui, poll_login_task).run_if(in_state(AppState::LoginMenu)),
             );
     }
@@ -36,15 +36,16 @@ fn setup_camera(mut commands: Commands) {
     commands.spawn(Camera2d);
 }
 
-
 fn menu_ui(
     mut commands: Commands,
     mut contexts: EguiContexts,
     mut settings: ResMut<ConnectionSettings>,
     mut exit: MessageWriter<AppExit>,
-    task_query: Query<&LoginTask>, 
+    task_query: Query<&LoginTask>,
 ) {
-    let Ok(ctx) = contexts.ctx_mut() else { return; };
+    let Ok(ctx) = contexts.ctx_mut() else {
+        return;
+    };
 
     let is_connecting = !task_query.is_empty();
 
@@ -54,22 +55,23 @@ fn menu_ui(
         .resizable(false)
         .show(ctx, |ui| {
             ui.vertical_centered(|ui| {
-
                 // Username section
                 ui.label("Nom d'utilisateur :");
 
                 ui.add_enabled(
                     !is_connecting,
-                    egui::TextEdit::singleline(&mut settings.username).hint_text("Pseudo")
+                    egui::TextEdit::singleline(&mut settings.username).hint_text("Pseudo"),
                 );
-                
+
                 ui.add_space(10.0);
 
                 // Password section
                 ui.label("Mot de passe :");
                 ui.add_enabled(
                     !is_connecting,
-                    egui::TextEdit::singleline(&mut settings.password).hint_text("Mot de passe").password(true)
+                    egui::TextEdit::singleline(&mut settings.password)
+                        .hint_text("Mot de passe")
+                        .password(true),
                 );
 
                 ui.add_space(10.0);
@@ -80,12 +82,16 @@ fn menu_ui(
                 }
 
                 ui.add_enabled_ui(!is_connecting, |ui| {
-                    let btn_text = if is_connecting { "Connexion..." } else { "Se Connecter" };
-                    
+                    let btn_text = if is_connecting {
+                        "Connexion..."
+                    } else {
+                        "Se Connecter"
+                    };
+
                     if ui.button(btn_text).clicked() {
                         if !settings.username.is_empty() && !settings.password.is_empty() {
                             settings.error_message = None;
-                            
+
                             let payload = LoginRequest {
                                 username: settings.username.clone(),
                                 password: settings.password.clone(),
@@ -99,7 +105,9 @@ fn menu_ui(
                                     .body_json(&payload)
                                     .map_err(|_| "Erreur de formatage JSON".to_string())?
                                     .await
-                                    .map_err(|e| format!("Impossible de joindre le Gatekeeper: {}", e))?;
+                                    .map_err(|e| {
+                                        format!("Impossible de joindre le Gatekeeper: {}", e)
+                                    })?;
 
                                 if res.status().is_success() {
                                     res.body_json::<LoginResponse>()
@@ -131,19 +139,19 @@ fn poll_login_task(
     mut settings: ResMut<ConnectionSettings>,
 ) {
     for (entity, mut task) in &mut query {
-        
         if let Some(result) = future::block_on(future::poll_once(&mut task.0)) {
-            
             commands.entity(entity).despawn();
 
             match result {
                 Ok(login_response) => {
                     println!(
-                        "Connexion réussie ! Redirection vers le serveur : {}:{}", 
-                        login_response.server.ip, 
-                        login_response.server.port
+                        "Connexion réussie ! Redirection vers le serveur : {}:{}",
+                        login_response.server.ip, login_response.server.port
                     );
-                    
+
+                    settings.server_target =
+                        Some((login_response.server.ip, login_response.server.port));
+
                     next_state.set(AppState::InGame);
                 }
                 Err(error_msg) => {
