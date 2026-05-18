@@ -2,13 +2,15 @@ use redis::{AsyncCommands, aio::MultiplexedConnection};
 use tokio::net::UdpSocket;
 use shared::ServerInfo;
 
+const BUFFER_SIZE: usize = 2048;
+
 
 //Listen to the heartbeats (currently just ServerInfo JSON sent by game servers) 
 //and store the latest info in RAM using Redis with a short Time-To-Live (TTL) to automatically remove inactive servers.
 pub async fn heartbeat_listener(mut redis_conn: MultiplexedConnection) {
     //Socket is binded on 0.0.0.0:8000 to receive heartbeats from all servers in the local network on any interface.
     let socket = UdpSocket::bind("0.0.0.0:8000").await.expect("Failed to bind UDP");
-    let mut buf = [0; 2048];
+    let mut buf = [0; BUFFER_SIZE];
 
     println!("Listener started on UDP 8000...");
 

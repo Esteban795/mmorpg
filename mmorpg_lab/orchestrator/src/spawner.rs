@@ -1,9 +1,8 @@
 use redis::{AsyncCommands, aio::MultiplexedConnection};
 use shared::ServerInfo;
 use tokio::time::{interval, Duration};
-use tokio::process::Command;
+//use tokio::process::Command;
 use std::net::UdpSocket;
-use std::collections::HashSet;
 
 //Settings for the spawner. Adjust as needed for testing or production.
 const HOT_SERVERS_MIN: usize = 3;

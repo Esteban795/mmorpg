@@ -1,6 +1,6 @@
 use shared::ServerInfo;
 
-use redis::{AsyncCommands, Client, RedisError, aio::MultiplexedConnection};
+use redis::{AsyncCommands, RedisError, aio::MultiplexedConnection};
 
 #[derive(Clone)]
 pub struct ApiState {
