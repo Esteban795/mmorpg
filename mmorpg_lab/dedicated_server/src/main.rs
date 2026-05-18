@@ -42,12 +42,21 @@ fn main() {
         .parse()
         .expect("Invalid ORCH_ADDR");
 
+    // get zone from environment variable, defaulting to "zone_A" if not set
+    let zone = std::env::var("DS_ZONE").unwrap_or_else(|_| "zone_A".to_string());
+
+    // get max players from environment variable, defaulting to 100 if not set
+    let max_players: u16 = std::env::var("DS_MAX_PLAYERS")
+        .unwrap_or_else(|_| "100".to_string())
+        .parse()
+        .expect("Invalid MAX_PLAYERS");
+
     let config = ServerConfig {
         id: Uuid::new_v4().to_string(),
         ip: "127.0.0.1".to_string(), // Only local IP for this lab - might need to be changed for a env variable in a real deployment
         port,
-        zone: "zone_A".to_string(), // Might need to adjust this name to match the gatekeeper's logic
-        max_players: 100,
+        zone,
+        max_players,
         orchestrator_addr,
     };
 
@@ -153,7 +162,7 @@ fn send_heartbeat(
         let status = if current_players >= config.max_players {
             "full".to_string()
         } else {
-            "online".to_string()
+            "available".to_string()
         };
 
         let hb = ServerInfo {
