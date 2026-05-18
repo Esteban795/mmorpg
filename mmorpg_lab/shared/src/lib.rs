@@ -9,12 +9,36 @@ pub struct ServerInfo {
     pub ip: String,
     pub port: u16,
     pub zone: String,
-    pub num_players : u16,
-    pub capacity : u16,
-    pub lat : f64,
-    pub lon : f64,
+    pub num_players: u16,
+    pub capacity: u16,
+    pub lat: f64,
+    pub lon: f64,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct LoginRequest {
+    pub username: String,
+    pub password: String,
+}
+
+// Response with the IP of the game server to connect to
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct LoginResponse {
+    pub player_uuid: String,
+    pub server: SimpleServerInfo,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ErrorResponse {
+    pub error: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SimpleServerInfo {
+    pub ip: String,
+    pub port: u16,
+    pub zone: String,
+}
 
 #[cfg(test)]
 mod tests {
