@@ -106,5 +106,16 @@ Instead of an $O(N²)$ broadcast where every player receives data about every ot
 
 ### 3. Gatekeeper Implementation
 
+The gatekeeper is a REST API made in Rust, which follows a simple architecture using `axum` and its way of doing things. It uses redis under the hood to communicate with the orchestrator to gather informations about game servers, mostly if they are available and where they are located on the globe. The locations of those servers are then used to determine the lowest latency that we could offer to our client, and this metric is (for now) the only one that decides which game server we want to redirect our player on.
+
+
+#### Technical Choices & Features:
+The REST API is listening on `DEFAULT_GATEKEEPER_ADDR_PORT` environment variable. It defaults to `127.0.0.1:8080`.
+
++ REST API : two very simple endpoints : 
+  + `/login` which takes a username and a password. Currently accepts any username with password '1234' and returns the ip, port and zone of the game server that is closest to the player. For now, it checks the redis database every time but it should cache the available servers to reduce latency in the future.
+  + `/health` which takes no parameters and only returns a OK. It's basically a ping to check if the API is up and available. 
++ Redis : uses the `redis` crate to open multiplexed connections to prevent blocking any incoming transactions
+
 ### 4. Orchestrator Implementation
 
