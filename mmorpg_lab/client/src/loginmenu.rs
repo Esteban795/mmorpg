@@ -132,9 +132,9 @@ fn menu_ui(
 
 // Poll to see when the login task is done, and handle the result (success or error)
 
-fn poll_login_task(
+fn poll_login_task( 
     mut commands: Commands,
-    mut query: Query<(Entity, &mut LoginTask)>, // Note le `mut` ici !
+    mut query: Query<(Entity, &mut LoginTask)>,
     mut next_state: ResMut<NextState<AppState>>,
     mut settings: ResMut<ConnectionSettings>,
 ) {
