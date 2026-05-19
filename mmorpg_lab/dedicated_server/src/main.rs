@@ -112,7 +112,13 @@ fn start_server(mut server: ResMut<QuinnetServer>, config: Res<ServerConfig>) {
         defaultables: Default::default(),
     };
 
-    server.start_endpoint(endpoint_config).unwrap();
+    if let Err(e) = server.start_endpoint(endpoint_config) {
+        eprintln!(
+            "ERREUR CRITIQUE : Impossible de démarrer l'endpoint QUIC : {:?}",
+            e
+        );
+        return;
+    }
     println!(
         "DEDICATED SERVER [{}]: Listening for players on port {}...",
         config.id, config.port

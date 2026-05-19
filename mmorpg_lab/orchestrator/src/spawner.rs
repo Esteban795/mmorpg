@@ -116,10 +116,19 @@ fn find_free_port(cursor: &mut u16) -> u16 {
 async fn spawn_dedicated_server(port: u16, zone: &str) {
     println!("Booting Bevy server on port {} in zone {}", port, zone);
 
-    let executable_path = format!(
-        "./target/debug/dedicated_server{}",
+    let profile = if cfg!(debug_assertions) {
+        "debug"
+    } else {
+        "release"
+    };
+
+    let default_path = format!(
+        "./target/{}/dedicated_server{}",
+        profile,
         std::env::consts::EXE_SUFFIX
     );
+
+    let executable_path = std::env::var("DEDICATED_SERVER_PATH").unwrap_or(default_path);
 
     match tokio::process::Command::new(&executable_path)
         .env("DS_PORT", port.to_string())
