@@ -9,9 +9,18 @@ use bevy_quinnet::client::QuinnetClientPlugin;
 use loginmenu::LoginMenuPlugin;
 use network::NetworkPlugin;
 use state::AppState;
+use tracing::{Level, info};
+use tracing_subscriber::FmtSubscriber;
 
 fn main() {
-    println!("Hello, world!");
+    let subscriber = FmtSubscriber::builder()
+        .with_max_level(Level::INFO)
+        .finish();
+
+    tracing::subscriber::set_global_default(subscriber)
+        .expect("Erreur fatale : impossible d'initialiser tracing");
+
+    info!("Starting client...");
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugins(QuinnetClientPlugin::default())

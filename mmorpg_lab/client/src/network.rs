@@ -27,14 +27,14 @@ fn start_connection(
     mut next_state: ResMut<NextState<AppState>>,
 ) {
     if let Some((ip, port)) = &settings.server_target {
-        println!(
-            "CLIENT : Lancement de la connexion QUIC vers {}:{}...",
+        info!(
+            "CLIENT : Launching QUIC connection to {}:{}...",
             ip, port
         );
 
         let server_ip = ip
             .parse::<IpAddr>()
-            .expect("Format IP invalide fourni par le Gatekeeper");
+            .expect("Invalid IP format from Gatekeeper");
         let local_bind_ip = [0, 0, 0, 0];
 
         // Opens a QUIC connection to the game server with the provided IP and port, skipping certificate verification for simplicity
@@ -46,18 +46,18 @@ fn start_connection(
 
         // handles the result of the connection attempt : if failure, return to login menu and display error message
         if let Err(e) = result {
-            eprintln!(
-                "CLIENT ERREUR : Échec de l'ouverture de connexion : {:?}",
+            error!(
+                "CLIENT ERROR : Failed to open connection : {:?}",
                 e
             );
 
-            settings.error_message = Some(format!("Échec réseau local : {:?}", e));
+            settings.error_message = Some(format!("Local network failure : {:?}", e));
 
             next_state.set(AppState::LoginMenu);
         }
     } else {
-        eprintln!("ERREUR : Aucun serveur cible n'a été défini !");
-        settings.error_message = Some("Erreur interne : Cible introuvable".to_string());
+        error!("CLIENT ERROR : No target server defined !");
+        settings.error_message = Some("Internal error : Target not found".to_string());
         next_state.set(AppState::LoginMenu);
     }
 }
@@ -68,8 +68,8 @@ fn handle_connection_events(
     settings: Res<ConnectionSettings>,
 ) {
     for _event in connection_events.read() {
-        println!(
-            "CLIENT : Connexion QUIC établie ! Envoi du pseudo '{}'...",
+        info!(
+            "CLIENT : QUIC connection established ! Sending username '{}'...",
             settings.username
         );
 
@@ -90,9 +90,10 @@ fn handle_messages(
     let connection = client.connection_mut();
 
     while let Ok(Some(message)) = connection.receive_message::<ServerMessage>() {
+        // info!("Received message : {} from server", message);
         match message {
             ServerMessage::Welcome { player_id } => {
-                println!("ID Local reçu: {}", player_id);
+                info!("Local ID received : {}", player_id);
                 game_state.my_id = Some(player_id);
             }
             ServerMessage::AOISnapshot { players } => {

@@ -6,6 +6,7 @@ use futures_lite::future;
 
 use crate::state::AppState;
 use shared::{LoginRequest, LoginResponse};
+use tracing::{error, info};
 
 // Bevy task to run the async login request without blocking main thread
 #[derive(Component)]
@@ -33,6 +34,7 @@ impl Plugin for LoginMenuPlugin {
 }
 
 fn setup_camera(mut commands: Commands) {
+    info!("Setting up camera");
     commands.spawn(Camera2d);
 }
 
@@ -100,21 +102,20 @@ fn menu_ui(
                             // Get IO Task pool from Bevy
                             let thread_pool = IoTaskPool::get();
 
+                            info!("Starting login task for user '{}'", settings.username);
                             let task = thread_pool.spawn(async move {
                                 let mut res = surf::post("http://127.0.0.1:8080/login")
                                     .body_json(&payload)
                                     .map_err(|_| "Erreur de formatage JSON".to_string())?
                                     .await
-                                    .map_err(|e| {
-                                        format!("Impossible de joindre le Gatekeeper: {}", e)
-                                    })?;
+                                    .map_err(|e| format!("Can't reach the gatekeeper : {}", e))?;
 
                                 if res.status().is_success() {
                                     res.body_json::<LoginResponse>()
                                         .await
                                         .map_err(|_| "Format de réponse invalide".to_string())
                                 } else {
-                                    Err("Identifiants incorrects ou serveurs pleins".to_string())
+                                    Err("Invalid credentials or the servers are full".to_string())
                                 }
                             });
 
@@ -132,7 +133,7 @@ fn menu_ui(
 
 // Poll to see when the login task is done, and handle the result (success or error)
 
-fn poll_login_task( 
+fn poll_login_task(
     mut commands: Commands,
     mut query: Query<(Entity, &mut LoginTask)>,
     mut next_state: ResMut<NextState<AppState>>,
@@ -144,8 +145,8 @@ fn poll_login_task(
 
             match result {
                 Ok(login_response) => {
-                    println!(
-                        "Connexion réussie ! Redirection vers le serveur : {}:{}",
+                    info!(
+                        "Successful login! Redirecting to server {}:{}",
                         login_response.server.ip, login_response.server.port
                     );
 
@@ -155,7 +156,7 @@ fn poll_login_task(
                     next_state.set(AppState::InGame);
                 }
                 Err(error_msg) => {
-                    println!("Erreur : {}", error_msg);
+                    error!("Polling login task : {}", error_msg);
                     settings.error_message = Some(error_msg);
                 }
             }

@@ -4,6 +4,7 @@ use shared::ClientMessage;
 use std::collections::HashMap;
 
 use crate::state::AppState;
+use tracing::{info};
 
 pub struct GamePlugin;
 
@@ -56,6 +57,9 @@ fn player_input(keyboard: Res<ButtonInput<KeyCode>>, mut client: ResMut<QuinnetC
         x += 1.0;
     }
 
+    if (x, y) != (0.0, 0.0) { 
+        info!("Player input: x={}, y={}", x, y);
+    }
     if x != 0.0 || y != 0.0 {
         let connection = client.connection_mut();
         let _ = connection.send_message(ClientMessage::MoveInput { x, y });

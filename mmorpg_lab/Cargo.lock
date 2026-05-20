@@ -2208,6 +2208,8 @@ dependencies = [
  "serde",
  "shared",
  "surf",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
