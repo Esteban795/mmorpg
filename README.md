@@ -5,9 +5,10 @@ A modular, scalable, and authoritative MMORPG architecture built in Rust.
 This project demonstrates a modern microservices approach to multiplayer game development, featuring a Gatekeeper for authentication, an Orchestrator for auto-scaling, and Dedicated Game Servers running on Bevy.
 
 ## Table of Contents
-1. [How to Test the Cluster](#how-to-test-the-cluster)
-2. [Connecting Clients](#connecting-clients)
-3. [Architecture & Implementation](#architecture--implementation)
+1. [Prerequisites](#prerequisites)
+2. [How to Test the Cluster](#how-to-test-the-cluster)
+3. [Connecting Clients](#connecting-clients)
+4. [Architecture & Implementation](#architecture--implementation)
     - [Client](#1-client-implementation)
     - [Dedicated Game Server](#2-dedicated-game-server-implementation)
     - [Gatekeeper](#3-gatekeeper-implementation)
@@ -15,9 +16,43 @@ This project demonstrates a modern microservices approach to multiplayer game de
 
 ---
 
+## Prerequisites
+
+Before building or running the project, ensure your development environment meets the following requirements:
+
+* **Rust Toolchain:** You must have Rust installed (version 1.80+ recommended). Install it via [rustup.rs](https://rustup.rs/).
+* **Redis Database:** The Orchestrator and Gatekeeper rely heavily on Redis for state management and matchmaking.
+  1. **Install Docker (If not already installed):**
+     * **Windows / macOS:** Download and install [Docker Desktop](https://www.docker.com/products/docker-desktop/). Ensure the Docker Desktop application is running.
+     * **Linux (Ubuntu/Debian):** Run the following commands in your terminal to install and start Docker:
+       ```bash
+       sudo apt update
+       sudo apt install -y docker.io
+       sudo systemctl start docker
+       sudo systemctl enable docker
+       # Optional: allow running docker without sudo:
+       sudo usermod -aG docker $USER
+       ```
+       *(Note: If you add your user to the docker group, log out and back in for changes to take effect).*
+
+  2. **Launch Redis via Docker:** Once Docker is running, spin up a local Redis instance instantly with:
+     ```bash
+     docker run --name mmorpg-redis -p 6379:6379 -d redis
+     ```
+* **OS-Specific Dependencies (For Bevy):** Because the game client uses the Bevy engine (v0.18) for rendering, you may need specific system libraries depending on your OS.
+  * **Linux:** You will need ALSA and udev. E.g., on Ubuntu:
+    ```
+    sudo apt install g++ pkg-config libx11-dev libasound2-dev libudev-dev
+    ```
+  * **Windows/macOS:** Generally works out of the box with the standard Rust toolchain.
+
 ## How to Test the Cluster
 
-**Prerequisite:** Ensure you have the Redis database running locally (e.g., via Docker: `docker run --name mmorpg-redis -p 6379:6379 -d redis`).
+**Prerequisite:** Ensure you have the Redis database running locally (e.g., via Docker:). 
+```
+docker run --name mmorpg-redis -p 6379:6379 -d redis
+```
+
 
 Start by compiling the entire workspace to avoid file lock contentions later:
 ```bash
