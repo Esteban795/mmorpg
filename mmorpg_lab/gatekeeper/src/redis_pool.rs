@@ -1,5 +1,5 @@
 use shared::ServerInfo;
-
+use tracing::{error, info, warn};
 use redis::{AsyncCommands, RedisError, aio::MultiplexedConnection};
 
 #[derive(Clone)]
@@ -15,7 +15,7 @@ pub async fn get_servers(state: &ApiState) -> Result<Vec<ServerInfo>, RedisError
     //Get all the servers from Redis using the new pattern for server ids.
     {
         let Ok(mut scan_iter) = conn.scan_match::<_, String>("server:*").await else {
-            eprintln!("Error : could not retrieve game servers from Redis");
+            error!("Error : could not retrieve game servers from Redis");
             return Err(RedisError::from((
                 redis::ErrorKind::IoError,
                 "Could not retrieve game servers from Redis",
@@ -40,7 +40,7 @@ pub async fn get_servers(state: &ApiState) -> Result<Vec<ServerInfo>, RedisError
                     }
                 }
                 Err(e) => {
-                    eprintln!("Ignoring malformed JSON: {}", e);
+                    warn!(json = server_json, "Ignoring malformed JSON: {}", e);
                     continue;
                 }
             }

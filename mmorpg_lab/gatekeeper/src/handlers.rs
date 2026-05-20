@@ -3,6 +3,7 @@ use std::net::SocketAddr;
 use crate::ApiState;
 use crate::redis_pool::get_servers;
 use shared::{ErrorResponse, LoginRequest, LoginResponse, SimpleServerInfo};
+use tracing::{error, info, warn};
 
 use axum::{
     Json,
@@ -42,7 +43,7 @@ pub async fn login_handler(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Json(payload): Json<LoginRequest>,
 ) -> Result<Json<LoginResponse>, (StatusCode, Json<ErrorResponse>)> {
-    println!(
+    info!(
         "New connection request from player : {} with password : {}",
         payload.username, payload.password
     );
@@ -61,6 +62,7 @@ pub async fn login_handler(
     let game_servers = match get_servers(&state).await {
         Ok(servers) => servers,
         Err(_) => {
+            error!("No game servers available when player {} tried to log in", payload.username);
             return Err((
                 StatusCode::SERVICE_UNAVAILABLE,
                 Json(ErrorResponse {
@@ -72,6 +74,7 @@ pub async fn login_handler(
 
     match game_servers.len() {
         0 => {
+            error!("No game servers available when player {} tried to log in", payload.username);
             return Err((
                 StatusCode::SERVICE_UNAVAILABLE,
                 Json(ErrorResponse {
@@ -80,6 +83,10 @@ pub async fn login_handler(
             ));
         }
         1 => {
+            warn!(
+                "Only one game server available. Player {} will be connected to it without geolocation",
+                payload.username
+            );
             let response = LoginResponse {
                 player_uuid: Uuid::new_v4().to_string(),
                 server: SimpleServerInfo {
@@ -116,7 +123,7 @@ pub async fn login_handler(
                         });
 
                     if let Some((_, best_server)) = closest_server_option {
-                        println!(
+                        info!(
                             "Joueur localisé. Serveur le plus proche : {} (Zone: {})",
                             best_server.ip, best_server.zone
                         );
