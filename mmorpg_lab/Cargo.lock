@@ -5163,6 +5163,8 @@ dependencies = [
  "shared",
  "sysinfo 0.30.13",
  "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

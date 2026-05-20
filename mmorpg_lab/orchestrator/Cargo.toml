@@ -9,3 +9,5 @@ shared = { path = "../shared" }
 redis = { version = "0.25", features = ["tokio-comp"] }
 serde_json = "1.0.149"
 sysinfo = "0.30"
+tracing = "0.1.44"
+tracing-subscriber = "0.3.23"
