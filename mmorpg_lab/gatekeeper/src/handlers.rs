@@ -50,6 +50,7 @@ pub async fn login_handler(
 
     // Auth : accept any username with the password 1234, username does not matter
     if payload.password != "1234" {
+        warn!("Player {} provided invalid credentials", payload.username);
         return Err((
             StatusCode::SERVICE_UNAVAILABLE,
             Json(ErrorResponse {
@@ -62,7 +63,10 @@ pub async fn login_handler(
     let game_servers = match get_servers(&state).await {
         Ok(servers) => servers,
         Err(_) => {
-            error!("No game servers available when player {} tried to log in", payload.username);
+            error!(
+                "No game servers available when player {} tried to log in",
+                payload.username
+            );
             return Err((
                 StatusCode::SERVICE_UNAVAILABLE,
                 Json(ErrorResponse {
@@ -74,7 +78,10 @@ pub async fn login_handler(
 
     match game_servers.len() {
         0 => {
-            error!("No game servers available when player {} tried to log in", payload.username);
+            error!(
+                "No game servers available when player {} tried to log in",
+                payload.username
+            );
             return Err((
                 StatusCode::SERVICE_UNAVAILABLE,
                 Json(ErrorResponse {
@@ -99,6 +106,10 @@ pub async fn login_handler(
             return Ok(Json(response));
         }
         _ => {
+            info!(
+                "Multiple game servers available. Attempting to geolocate player {} and connect to the closest server",
+                payload.username
+            );
             // If more than one server is available, try to geolocate the player and return the closest server found
             let user_ip = addr.ip().to_string();
             let geo_url = format!("http://ip-api.com/json/{}", user_ip);
@@ -124,8 +135,8 @@ pub async fn login_handler(
 
                     if let Some((_, best_server)) = closest_server_option {
                         info!(
-                            "Joueur localisé. Serveur le plus proche : {} (Zone: {})",
-                            best_server.ip, best_server.zone
+                            "Located player {}. Closest server: {} (Zone: {})",
+                            payload.username, best_server.ip, best_server.zone
                         );
 
                         return Ok(Json(LoginResponse {
@@ -140,6 +151,10 @@ pub async fn login_handler(
                 }
             }
 
+            info!(
+                "Could not geolocate player {} or determine closest server. Falling back to first available server.",
+                payload.username
+            );
             let fallback_server = &game_servers[0];
 
             Ok(Json(LoginResponse {

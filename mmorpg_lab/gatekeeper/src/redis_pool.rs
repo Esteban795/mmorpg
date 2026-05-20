@@ -1,6 +1,6 @@
+use redis::{AsyncCommands, RedisError, aio::MultiplexedConnection};
 use shared::ServerInfo;
 use tracing::{error, info, warn};
-use redis::{AsyncCommands, RedisError, aio::MultiplexedConnection};
 
 #[derive(Clone)]
 pub struct ApiState {
@@ -22,20 +22,26 @@ pub async fn get_servers(state: &ApiState) -> Result<Vec<ServerInfo>, RedisError
             )));
         };
 
-    
         while let Some(key) = scan_iter.next_item().await {
+            info!(key = key, "Found game server in Redis");
             server_keys.push(key);
         }
     }
-
-    
 
     for key in server_keys {
         if let Ok(server_json) = conn.hget::<_, _, String>(&key, "data").await {
             match serde_json::from_str::<ServerInfo>(&server_json) {
                 Ok(info) => {
                     // Check availability and capacity directly from the JSON payload
+                    info!(
+                        server_json = server_json,
+                        "Parsed game server info from Redis"
+                    );
                     if info.status == "available" && info.num_players < info.capacity {
+                        info!(
+                            server_json = server_json,
+                            "Game server is available and has capacity, adding to list"
+                        );
                         server_infos.push(info);
                     }
                 }
@@ -46,6 +52,6 @@ pub async fn get_servers(state: &ApiState) -> Result<Vec<ServerInfo>, RedisError
             }
         }
     }
-    
+
     Ok(server_infos)
 }
