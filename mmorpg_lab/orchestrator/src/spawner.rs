@@ -3,7 +3,7 @@ use shared::ServerInfo;
 use std::net::UdpSocket;
 use std::time::Instant;
 use tokio::time::{Duration, interval};
-use tracing::{error, info, warn};
+use tracing::{error, info};
 
 //Settings for the spawner. Adjust as needed for testing or production.
 const HOT_SERVERS_MIN: usize = 3;
