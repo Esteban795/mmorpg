@@ -1,5 +1,7 @@
 use redis::{Client, RedisError, aio::MultiplexedConnection};
 use serde::{Deserialize, Serialize};
+use std::fmt;
+
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ClientMessage {
@@ -8,11 +10,29 @@ pub enum ClientMessage {
     MoveInput { x: f32, y: f32 },
 }
 
+impl fmt::Display for ClientMessage {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ClientMessage::Join { username } => write!(f, "Join {{ username: {} }}", username),
+            ClientMessage::MoveInput { x, y } => write!(f, "MoveInput {{ x: {}, y: {} }}", x, y),
+        }
+    }
+}
+
 // Messages sent from Dedicated Server to Client
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ServerMessage {
     Welcome { player_id: u64 },
     AOISnapshot { players: Vec<PlayerState> },
+}
+
+impl fmt::Display for ServerMessage {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ServerMessage::Welcome { player_id } => write!(f, "Welcome {{ player_id: {} }}", player_id),
+            ServerMessage::AOISnapshot { players } => write!(f, "AOISnapshot {{ players: {:?} }}", players),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
