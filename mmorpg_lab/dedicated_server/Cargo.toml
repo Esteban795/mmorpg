@@ -17,3 +17,5 @@ uuid = { version = "1.23.1", features = ["v4"] }
 
 # Local workspace dependencies
 shared = { path = "../shared" }
+tracing = "0.1.44"
+tracing-subscriber = "0.3.23"

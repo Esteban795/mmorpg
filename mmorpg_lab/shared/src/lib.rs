@@ -1,7 +1,7 @@
 use redis::{Client, RedisError, aio::MultiplexedConnection};
 use serde::{Deserialize, Serialize};
 use std::fmt;
-
+use tracing::{error};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ClientMessage {
@@ -52,7 +52,7 @@ pub struct ServerInfo {
 // Multiplexed connection to avoid blocking other users when connecting a user
 pub async fn init_redis(redis_url: &str) -> Result<MultiplexedConnection, RedisError> {
     let Ok(client) = Client::open(redis_url) else {
-        eprintln!(
+        error!(
             "Error : could not create Redis client with URL '{}'",
             redis_url
         );
@@ -63,8 +63,8 @@ pub async fn init_redis(redis_url: &str) -> Result<MultiplexedConnection, RedisE
     };
 
     let Ok(conn) = client.get_multiplexed_async_connection().await else {
-        eprintln!("Error : could not connect to Redis at '{}'", redis_url);
-        eprintln!(
+        error!("Error : could not connect to Redis at '{}'", redis_url);
+        error!(
             "Make sure Redis is running and accessible at '{}'",
             redis_url
         );

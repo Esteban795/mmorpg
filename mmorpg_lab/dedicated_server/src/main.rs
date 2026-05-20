@@ -7,6 +7,8 @@ use shared::{ClientMessage, PlayerState, ServerInfo, ServerMessage};
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr, UdpSocket};
 use std::time::Duration;
+use tracing::{Level, info};
+use tracing_subscriber::FmtSubscriber;
 use uuid::Uuid;
 
 const DEFAULT_DS_PORT: &str = "8001";
@@ -41,25 +43,39 @@ pub struct PlayerRegistry {
 }
 
 fn main() {
+    let subscriber = FmtSubscriber::builder()
+        .with_max_level(Level::INFO)
+        .finish();
+
+    tracing::subscriber::set_global_default(subscriber)
+        .expect("Erreur fatale : impossible d'initialiser tracing");
+
     // get port and orchestrator address from environment variables, with defaults
     let port: u16 = std::env::var("DS_PORT")
         .unwrap_or_else(|_| DEFAULT_DS_PORT.to_string())
         .parse()
         .expect("Invalid DS_PORT");
 
+    info!("Starting dedicated server on port {}...", port);
+
     let orchestrator_addr: SocketAddr = std::env::var("ORCH_ADDR")
         .unwrap_or_else(|_| format!("127.0.0.1:{}", DEFAULT_ORCH_PORT))
         .parse()
         .expect("Invalid ORCH_ADDR");
 
+    info!("Orchestrator address: {}", orchestrator_addr);
     // get zone from environment variable, defaulting to "zone_A" if not set
     let zone = std::env::var("DS_ZONE").unwrap_or_else(|_| DEFAULT_ZONE.to_string());
+
+    info!("Server zone: {}", zone);
 
     // get max players from environment variable, defaulting to 100 if not set
     let max_players: u16 = std::env::var("DS_MAX_PLAYERS")
         .unwrap_or_else(|_| DEFAULT_MAX_PLAYERS.to_string())
         .parse()
         .expect("Invalid MAX_PLAYERS");
+
+    info!("Max players: {}", max_players);
 
     let config = ServerConfig {
         id: Uuid::new_v4().to_string(),
@@ -73,6 +89,10 @@ fn main() {
     let socket = UdpSocket::bind("0.0.0.0:0").expect("Failed to bind heartbeat socket");
     socket.set_nonblocking(true).unwrap();
 
+    info!(
+        "Dedicated server configuration running : IP={}, Port={}, Zone={}, Max Players={}",
+        config.ip, config.port, config.zone, config.max_players
+    );
     App::new()
         .add_plugins(
             MinimalPlugins.set(ScheduleRunnerPlugin::run_loop(Duration::from_secs_f64(
@@ -113,13 +133,13 @@ fn start_server(mut server: ResMut<QuinnetServer>, config: Res<ServerConfig>) {
     };
 
     if let Err(e) = server.start_endpoint(endpoint_config) {
-        eprintln!(
-            "ERREUR CRITIQUE : Impossible de démarrer l'endpoint QUIC : {:?}",
+        error!(
+            "FATAL ERROR : Could not start up QUIC endpoint : {:?}",
             e
         );
         return;
     }
-    println!(
+    info!(
         "DEDICATED SERVER [{}]: Listening for players on port {}...",
         config.id, config.port
     );
@@ -133,11 +153,11 @@ fn handle_connections(
     mut registry: ResMut<PlayerRegistry>,
 ) {
     for event in connection_events.read() {
-        println!("Incoming QUIC connection established: ID {}", event.id);
+        info!("Incoming QUIC connection established: ID {}", event.id);
     }
 
     for event in connection_lost_events.read() {
-        println!("Connection lost for ID {}", event.id);
+        info!("Connection lost for ID {}", event.id);
         registry.players.remove(&event.id);
     }
 }
@@ -151,7 +171,7 @@ fn handle_messages(mut server: ResMut<QuinnetServer>, mut registry: ResMut<Playe
         {
             match message {
                 ClientMessage::Join { username } => {
-                    println!("Player '{}' (ID {}) joined the game!", username, client_id);
+                    info!("Player '{}' (ID {}) joined the game!", username, client_id);
                     registry.players.insert(
                         client_id,
                         PlayerData {
@@ -195,6 +215,7 @@ fn send_heartbeat(
 ) {
     // Execute every 5 seconds while being called at 20Hz
     if timer.0.tick(time.delta()).just_finished() {
+        info!("Sending heartbeat...");
         let current_players = registry.players.len() as u16;
 
         // Détermination dynamique du statut
@@ -216,6 +237,7 @@ fn send_heartbeat(
             cpu_usage: 0.0,
             mem_usage: 0,
         };
+        info!("Heartbeat info: IP={}, Port={}, Zone={}, Players={}/{}", hb.ip, hb.port, hb.zone, hb.num_players, hb.capacity);
 
         match serde_json::to_string(&hb) {
             Ok(payload) => {
@@ -223,15 +245,15 @@ fn send_heartbeat(
                     .0
                     .send_to(payload.as_bytes(), config.orchestrator_addr)
                 {
-                    eprintln!("Failed to send heartbeat: {}", e);
+                    error!("Failed to send heartbeat: {}", e);
                 } else {
-                    println!(
+                    info!(
                         "Heartbeat sent (Players: {}/{})",
                         hb.num_players, hb.capacity
                     );
                 }
             }
-            Err(e) => eprintln!("Failed to serialize heartbeat: {}", e),
+            Err(e) => warn!("Failed to serialize heartbeat: {}", e),
         }
     }
 }
