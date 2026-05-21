@@ -154,3 +154,18 @@ The REST API is listening on `DEFAULT_GATEKEEPER_ADDR_PORT` environment variable
 
 ### 4. Orchestrator Implementation
 
+The orchestrator acts as the central control server for the game cluster. It is responsible for monitoring the health of all running game servers and automatically scaling the server pool to ensure there is always enough capacity for incoming players, maintaining a buffer of 'hot' servers to handle sudden login spikes.
+
+#### Technical Choices & Features:
+
+**Asynchronous Runtime (Tokio):** Built entirely on the Tokio async runtime, allowing it to concurrently manage the UDP listener and the continuous server-scaling loop without blocking operations. It utilizes multiplexed Redis connections to handle database interactions.
+
+**UDP Heartbeat Listener:** Runs a background task listening on `0.0.0.0:8000` (configurable via `ORCH_PORT`). It continuously receives JSON `ServerInfo` payloads sent by the Dedicated Servers and updates their current state in the Redis database.
+
+**TTL-Based deletion:** Instead of relying on complex disconnect logic, theorchestrator stores server data in Redis with a strict 15-second Time-To-Live (TTL) handled directly by Redis. As servers send heartbeats, the TTL is refreshed. If a Dedicated Server crashes or hangs, its Redis key naturally expires, automatically removing it from the Gatekeeper's routing pool.
+
+**Proactive Auto-Scaling:** A scaler task ticks every 5 seconds to guarantee a minimum pool of available servers (currently configured to 3). It scans Redis for servers marked as "available" and calculates a projected count with servers already being started by the orchestrator. It actively tracks "pending spawns" with a 20-second timeout to prevent the system from over-spawning servers while binaries are still booting.
+
+**Dynamic Port Allocation & Process Spawning:** When the cluster needs more capacity, the orchestrator safely tests UDP socket bindings (between ports 8001 and 9000) to find a free port. Once secured, it uses `tokio::process::Command` to seamlessly spawn new child processes of the headless Bevy server, injecting parameters like `DS_PORT` and `DS_ZONE` via environment variables.
+
+
