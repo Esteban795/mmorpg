@@ -16,10 +16,10 @@ async fn main() {
         std::env::var("LISTEN_ADDR_PORT").unwrap_or_else(|_| DEFAULT_GATEKEEPER_ADDR_PORT.to_string());
 
     // Connect to Redis
-    let Ok(redis_conn) = shared::init_redis(&format!("redis://{}", redis_ip)).await else {
+    let Ok(redis_conn) = shared::init_redis(&format!("{}", redis_ip)).await else {
         eprintln!("Fatal error : could not connect to Redis");
         eprintln!(
-            "Make sure Redis is running and accessible at redis://{}",
+            "Make sure Redis is running and accessible at {}",
             redis_ip
         );
         return;
