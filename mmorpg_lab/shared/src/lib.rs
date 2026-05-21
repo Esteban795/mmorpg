@@ -3,6 +3,9 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 use tracing::{error};
 
+pub const DEFAULT_REDIS_IP: &str = "redis://127.0.0.1";
+pub const DEFAULT_GATEKEEPER_ADDR_PORT: &str = "127.0.0.1:8080";
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ClientMessage {
     Join { username: String },

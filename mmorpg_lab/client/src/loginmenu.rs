@@ -5,7 +5,7 @@ use bevy_egui::{EguiContexts, EguiPrimaryContextPass, egui};
 use futures_lite::future;
 
 use crate::state::AppState;
-use shared::{LoginRequest, LoginResponse};
+use shared::{DEFAULT_GATEKEEPER_ADDR_PORT, LoginRequest, LoginResponse};
 use tracing::{error, info};
 
 // Bevy task to run the async login request without blocking main thread
@@ -103,12 +103,17 @@ fn menu_ui(
                             let thread_pool = IoTaskPool::get();
 
                             info!("Starting login task for user '{}'", settings.username);
+                            let gatekeeper_addr = std::env::var("GATEKEEPER_ADDR_PORT")
+                                .unwrap_or_else(|_| DEFAULT_GATEKEEPER_ADDR_PORT.to_string());
                             let task = thread_pool.spawn(async move {
-                                let mut res = surf::post("http://127.0.0.1:8080/login")
-                                    .body_json(&payload)
-                                    .map_err(|_| "Erreur de formatage JSON".to_string())?
-                                    .await
-                                    .map_err(|e| format!("Can't reach the gatekeeper : {}", e))?;
+                                let mut res =
+                                    surf::post(&format!("http://{}/login", gatekeeper_addr))
+                                        .body_json(&payload)
+                                        .map_err(|_| "Erreur de formatage JSON".to_string())?
+                                        .await
+                                        .map_err(|e| {
+                                            format!("Can't reach the gatekeeper : {}", e)
+                                        })?;
 
                                 if res.status().is_success() {
                                     res.body_json::<LoginResponse>()

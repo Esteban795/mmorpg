@@ -1,5 +1,6 @@
 mod listener;
 mod spawner;
+use shared::{DEFAULT_REDIS_IP};
 
 use tracing::{Level, error, info};
 use tracing_subscriber::FmtSubscriber;
@@ -16,8 +17,8 @@ async fn main() {
     info!("Starting MMORPG Orchestrator...");
 
     // Initialize Redis
-    let redis_url = "redis://127.0.0.1/";
-    let redis_conn = match shared::init_redis(redis_url).await {
+    let redis_url = std::env::var("REDIS_IP").unwrap_or_else(|_| DEFAULT_REDIS_IP.to_string());
+    let redis_conn = match shared::init_redis(&redis_url).await {
         Ok(conn) => conn,
         Err(e) => {
             error!("Failed to start orchestrator due to Redis error: {}", e);
