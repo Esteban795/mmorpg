@@ -2208,6 +2208,8 @@ dependencies = [
  "serde",
  "shared",
  "surf",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -2655,6 +2657,8 @@ dependencies = [
  "serde",
  "serde_json",
  "shared",
+ "tracing",
+ "tracing-subscriber",
  "uuid",
 ]
 
@@ -3275,6 +3279,8 @@ dependencies = [
  "serde_json",
  "shared",
  "tokio",
+ "tracing",
+ "tracing-subscriber",
  "uuid",
 ]
 
@@ -5159,6 +5165,8 @@ dependencies = [
  "shared",
  "sysinfo 0.30.13",
  "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -6303,6 +6311,8 @@ version = "0.1.0"
 dependencies = [
  "redis",
  "serde",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

@@ -5,11 +5,21 @@ use axum::{Router, routing::get, routing::post};
 use handlers::{health_handler, login_handler};
 
 use redis_pool::ApiState;
+use tracing::{Level, error, info};
+use tracing_subscriber::FmtSubscriber;
 use shared::{DEFAULT_GATEKEEPER_ADDR_PORT, DEFAULT_REDIS_IP};
 
 #[tokio::main]
 async fn main() {
-    println!("Starting gatekeeper...");
+
+    let subscriber = FmtSubscriber::builder()
+        .with_max_level(Level::INFO)
+        .finish();
+
+    tracing::subscriber::set_global_default(subscriber)
+        .expect("Fatal error: could not set up logging");
+
+    info!("Starting gatekeeper...");
 
     let redis_ip = std::env::var("REDIS_IP").unwrap_or_else(|_| DEFAULT_REDIS_IP.to_string());
     let listen_addr =
@@ -17,9 +27,8 @@ async fn main() {
 
     // Connect to Redis
     let Ok(redis_conn) = shared::init_redis(&format!("{}", redis_ip)).await else {
-        eprintln!("Fatal error : could not connect to Redis");
-        eprintln!(
-            "Make sure Redis is running and accessible at {}",
+        error!(
+            "Fatal error: could not connect to Redis. Make sure Redis is running and accessible at {}",
             redis_ip
         );
         return;
@@ -34,11 +43,14 @@ async fn main() {
 
     // Bind to TCP port
     let Ok(listener) = tokio::net::TcpListener::bind(&listen_addr).await else {
-        eprintln!("Fatal error : could not bind to {}", listen_addr);
+        error!(
+            address = listen_addr,
+            "Fatal error: could not bind to TCP port"
+        );
         return;
     };
 
-    println!("API listening on http://{}", listen_addr);
+    info!(address = listen_addr, "API listening");
 
     if let Err(e) = axum::serve(
         listener,
@@ -46,6 +58,6 @@ async fn main() {
     )
     .await
     {
-        eprintln!("Fatal error (server crashed ??) : {}", e);
+        error!(error = ?e, "Fatal error (server crashed ??)");
     }
 }

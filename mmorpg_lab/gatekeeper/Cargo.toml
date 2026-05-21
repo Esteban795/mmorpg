@@ -12,3 +12,5 @@ uuid = { version = "1.23.1", features = ["v4"] }
 redis = { version = "0.25", features = ["tokio-comp"] }
 serde_json = "1.0.149"
 reqwest = { version = "0.12", features = ["json"] }
+tracing = "0.1.44"
+tracing-subscriber = "0.3.23"

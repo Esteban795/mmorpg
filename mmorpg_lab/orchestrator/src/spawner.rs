@@ -3,6 +3,7 @@ use shared::ServerInfo;
 use std::net::UdpSocket;
 use std::time::Instant;
 use tokio::time::{Duration, interval};
+use tracing::{error, info};
 
 //Settings for the spawner. Adjust as needed for testing or production.
 const HOT_SERVERS_MIN: usize = 3;
@@ -35,7 +36,7 @@ pub async fn maintain_hot_servers(mut redis_conn: MultiplexedConnection) {
         let available_count = count_available_servers(&mut redis_conn).await;
         let projected_count = available_count + pending_spawns.len();
 
-        println!(
+        info!(
             "Cluster Status: {} available, {} booting. Target: {}.",
             available_count,
             pending_spawns.len(),
@@ -44,7 +45,7 @@ pub async fn maintain_hot_servers(mut redis_conn: MultiplexedConnection) {
 
         if projected_count < HOT_SERVERS_MIN {
             let servers_to_spawn = HOT_SERVERS_MIN - projected_count;
-            println!("Need {} more servers. Spawning...", servers_to_spawn);
+            info!("Need {} more servers. Spawning...", servers_to_spawn);
 
             for _ in 0..servers_to_spawn {
                 // Find the next genuinely free port
@@ -71,7 +72,7 @@ async fn count_available_servers(redis_conn: &mut MultiplexedConnection) -> usiz
         let mut scan_iter = match redis_conn.scan_match::<_, String>("server:*").await {
             Ok(iter) => iter,
             Err(e) => {
-                eprintln!("Error scanning Redis for servers: {}", e);
+                error!("Error scanning Redis for servers: {}", e);
                 return 0;
             }
         };
@@ -119,13 +120,15 @@ fn find_free_port(cursor: &mut u16) -> u16 {
 }
 
 async fn spawn_dedicated_server(port: u16, zone: &str, max_players: u16) {
-    println!("Booting Bevy server on port {} in zone {}", port, zone);
+    info!("Booting Bevy server on port {} in zone {}", port, zone);
 
     let profile = if cfg!(debug_assertions) {
         "debug"
     } else {
         "release"
     };
+
+    info!("Using profile '{}' for dedicated server executable.", profile);
 
     let default_path = format!(
         "./target/{}/dedicated_server{}",
@@ -141,8 +144,8 @@ async fn spawn_dedicated_server(port: u16, zone: &str, max_players: u16) {
         .env("DS_MAX_PLAYERS", max_players.to_string())
         .spawn()
     {
-        Ok(_) => println!("Process started successfully."),
-        Err(e) => eprintln!(
+        Ok(_) => info!("Dedicated server started successfully."),
+        Err(e) => error!(
             "CRITICAL ERROR: Failed to launch server at '{}'. Error: {}",
             executable_path, e
         ),
