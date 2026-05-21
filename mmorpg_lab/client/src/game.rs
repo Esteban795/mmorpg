@@ -4,7 +4,7 @@ use shared::ClientMessage;
 use std::collections::HashMap;
 
 use crate::state::AppState;
-use tracing::{info};
+// use tracing::{info};
 
 pub struct GamePlugin;
 
