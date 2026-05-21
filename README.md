@@ -145,7 +145,7 @@ The gatekeeper is a REST API made in Rust, which follows a simple architecture u
 
 
 #### Technical Choices & Features:
-The REST API is listening on `DEFAULT_GATEKEEPER_ADDR_PORT` environment variable. It defaults to `127.0.0.1:8080`.
+The REST API is listening on `GATEKEEPER_ADDR_PORT` environment variable. It defaults to `127.0.0.1:8080`.
 
 + REST API : two very simple endpoints : 
   + `/login` which takes a username and a password. Currently accepts any username with password '1234' and returns the ip, port and zone of the game server that is closest to the player. For now, it checks the redis database every time but it should cache the available servers to reduce latency in the future.

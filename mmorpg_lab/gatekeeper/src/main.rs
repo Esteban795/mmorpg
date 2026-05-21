@@ -13,7 +13,7 @@ async fn main() {
 
     let redis_ip = std::env::var("REDIS_IP").unwrap_or_else(|_| DEFAULT_REDIS_IP.to_string());
     let listen_addr =
-        std::env::var("LISTEN_ADDR_PORT").unwrap_or_else(|_| DEFAULT_GATEKEEPER_ADDR_PORT.to_string());
+        std::env::var("GATEKEEPER_ADDR_PORT").unwrap_or_else(|_| DEFAULT_GATEKEEPER_ADDR_PORT.to_string());
 
     // Connect to Redis
     let Ok(redis_conn) = shared::init_redis(&format!("{}", redis_ip)).await else {
