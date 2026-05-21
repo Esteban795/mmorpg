@@ -5,7 +5,7 @@ use bevy_egui::{EguiContexts, EguiPrimaryContextPass, egui};
 use futures_lite::future;
 
 use crate::state::AppState;
-use shared::{LoginRequest, LoginResponse};
+use shared::{DEFAULT_GATEKEEPER_ADDR_PORT, LoginRequest, LoginResponse};
 
 // Bevy task to run the async login request without blocking main thread
 #[derive(Component)]
@@ -100,8 +100,10 @@ fn menu_ui(
                             // Get IO Task pool from Bevy
                             let thread_pool = IoTaskPool::get();
 
+                            let gatekeeper_addr = std::env::var("GATEKEEPER_ADDR_PORT")
+                                .unwrap_or_else(|_| DEFAULT_GATEKEEPER_ADDR_PORT.to_string());
                             let task = thread_pool.spawn(async move {
-                                let mut res = surf::post("http://127.0.0.1:8080/login")
+                                let mut res = surf::post(&format!("http://{}/login", gatekeeper_addr))
                                     .body_json(&payload)
                                     .map_err(|_| "Erreur de formatage JSON".to_string())?
                                     .await
@@ -132,7 +134,7 @@ fn menu_ui(
 
 // Poll to see when the login task is done, and handle the result (success or error)
 
-fn poll_login_task( 
+fn poll_login_task(
     mut commands: Commands,
     mut query: Query<(Entity, &mut LoginTask)>,
     mut next_state: ResMut<NextState<AppState>>,

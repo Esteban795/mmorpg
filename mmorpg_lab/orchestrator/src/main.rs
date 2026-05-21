@@ -1,13 +1,14 @@
 mod listener;
 mod spawner;
+use shared::{DEFAULT_REDIS_IP};
 
 #[tokio::main]
 async fn main() {
     println!("Starting MMORPG Orchestrator...");
 
     // Initialize Redis
-    let redis_url = "redis://127.0.0.1/";
-    let redis_conn = match shared::init_redis(redis_url).await {
+    let redis_url = std::env::var("REDIS_IP").unwrap_or_else(|_| DEFAULT_REDIS_IP.to_string());
+    let redis_conn = match shared::init_redis(&redis_url).await {
         Ok(conn) => conn,
         Err(e) => {
             eprintln!("Failed to start orchestrator due to Redis error: {}", e);
