@@ -1,6 +1,11 @@
 use redis::{Client, RedisError, aio::MultiplexedConnection};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use std::fmt;
+use tracing::{error};
+
+pub const DEFAULT_REDIS_IP: &str = "redis://127.0.0.1";
+pub const DEFAULT_GATEKEEPER_ADDR_PORT: &str = "127.0.0.1:8080";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ClientMessage {
@@ -9,11 +14,29 @@ pub enum ClientMessage {
     MoveInput { x: f32, y: f32 },
 }
 
+impl fmt::Display for ClientMessage {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ClientMessage::Join { username } => write!(f, "Join {{ username: {} }}", username),
+            ClientMessage::MoveInput { x, y } => write!(f, "MoveInput {{ x: {}, y: {} }}", x, y),
+        }
+    }
+}
+
 // Messages sent from Dedicated Server to Client
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ServerMessage {
     Welcome { player_id: Uuid },
     AOISnapshot { players: Vec<PlayerState> },
+}
+
+impl fmt::Display for ServerMessage {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ServerMessage::Welcome { player_id } => write!(f, "Welcome {{ player_id: {} }}", player_id),
+            ServerMessage::AOISnapshot { players } => write!(f, "AOISnapshot {{ players: {:?} }}", players),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -33,7 +56,7 @@ pub struct ServerInfo {
 // Multiplexed connection to avoid blocking other users when connecting a user
 pub async fn init_redis(redis_url: &str) -> Result<MultiplexedConnection, RedisError> {
     let Ok(client) = Client::open(redis_url) else {
-        eprintln!(
+        error!(
             "Error : could not create Redis client with URL '{}'",
             redis_url
         );
@@ -44,8 +67,8 @@ pub async fn init_redis(redis_url: &str) -> Result<MultiplexedConnection, RedisE
     };
 
     let Ok(conn) = client.get_multiplexed_async_connection().await else {
-        eprintln!("Error : could not connect to Redis at '{}'", redis_url);
-        eprintln!(
+        error!("Error : could not connect to Redis at '{}'", redis_url);
+        error!(
             "Make sure Redis is running and accessible at '{}'",
             redis_url
         );

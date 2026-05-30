@@ -8,15 +8,20 @@ use bevy_egui::EguiPlugin;
 use loginmenu::LoginMenuPlugin;
 use network::NetworkPlugin;
 use state::AppState;
+use tracing::{Level, info};
+use tracing_subscriber::FmtSubscriber;
 
 use tracing::info;
 
 fn main() {
-    tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-        .init();
+    let subscriber = FmtSubscriber::builder()
+        .with_max_level(Level::INFO)
+        .finish();
 
-    info!("Starting Client!");
+    tracing::subscriber::set_global_default(subscriber)
+        .expect("Fatal error : unable to set up logging subscriber");
+
+    info!("Starting client...");
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugins(LoginMenuPlugin)

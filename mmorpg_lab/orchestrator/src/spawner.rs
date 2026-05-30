@@ -3,9 +3,15 @@ use shared::ServerInfo;
 use std::net::UdpSocket;
 use std::time::Instant;
 use tokio::time::{Duration, interval};
+use tracing::{error, info};
 
 //Settings for the spawner. Adjust as needed for testing or production.
 const HOT_SERVERS_MIN: usize = 3;
+const MAX_PLAYERS_PER_SERVER: u16 = 3;
+const STARTING_PORT: u16 = 8001;
+const MAX_PORT: u16 = 9000;
+const TICKING_INTERVAL_SECS: u64 = 5;
+const BOOT_TIMEOUT_SECS: u64 = 20;
 
 pub async fn maintain_hot_servers(mut redis_conn: MultiplexedConnection) {
     println!(
@@ -13,10 +19,10 @@ pub async fn maintain_hot_servers(mut redis_conn: MultiplexedConnection) {
         HOT_SERVERS_MIN
     );
 
-    let mut ticker = interval(Duration::from_secs(5));
-    let mut port_cursor: u16 = 8001;
+    let mut ticker = interval(Duration::from_secs(TICKING_INTERVAL_SECS));
+    let mut port_cursor: u16 = STARTING_PORT;
     let mut pending_spawns: Vec<Instant> = Vec::new();
-    let boot_timeout = Duration::from_secs(20);
+    let boot_timeout = Duration::from_secs(BOOT_TIMEOUT_SECS);
 
     loop {
         //We get all the servers from Redis and count how many are available (currently just "not full" but later we can use cpu usage healthiness too).
@@ -30,7 +36,7 @@ pub async fn maintain_hot_servers(mut redis_conn: MultiplexedConnection) {
         let available_count = count_available_servers(&mut redis_conn).await;
         let projected_count = available_count + pending_spawns.len();
 
-        println!(
+        info!(
             "Cluster Status: {} available, {} booting. Target: {}.",
             available_count,
             pending_spawns.len(),
@@ -39,14 +45,14 @@ pub async fn maintain_hot_servers(mut redis_conn: MultiplexedConnection) {
 
         if projected_count < HOT_SERVERS_MIN {
             let servers_to_spawn = HOT_SERVERS_MIN - projected_count;
-            println!("Need {} more servers. Spawning...", servers_to_spawn);
+            info!("Need {} more servers. Spawning...", servers_to_spawn);
 
             for _ in 0..servers_to_spawn {
                 // Find the next genuinely free port
                 let free_port = find_free_port(&mut port_cursor);
 
                 // Spawn the server with the guaranteed free port
-                spawn_dedicated_server(free_port, "Canada").await;
+                spawn_dedicated_server(free_port, "Canada", MAX_PLAYERS_PER_SERVER).await;
 
                 // Track this spawn so we don't spawn it again on the next tick
                 pending_spawns.push(now);
@@ -66,7 +72,7 @@ async fn count_available_servers(redis_conn: &mut MultiplexedConnection) -> usiz
         let mut scan_iter = match redis_conn.scan_match::<_, String>("server:*").await {
             Ok(iter) => iter,
             Err(e) => {
-                eprintln!("Error scanning Redis for servers: {}", e);
+                error!("Error scanning Redis for servers: {}", e);
                 return 0;
             }
         };
@@ -95,8 +101,8 @@ async fn count_available_servers(redis_conn: &mut MultiplexedConnection) -> usiz
 fn find_free_port(cursor: &mut u16) -> u16 {
     loop {
         // Prevent it from going over the maximum allowed port limit
-        if *cursor > 9000 {
-            *cursor = 8001; // Wrap around and start searching from the beginning
+        if *cursor > MAX_PORT {
+            *cursor = STARTING_PORT; // Wrap around and start searching from the beginning
         }
 
         let test_addr = format!("0.0.0.0:{}", *cursor);
@@ -113,14 +119,16 @@ fn find_free_port(cursor: &mut u16) -> u16 {
     }
 }
 
-async fn spawn_dedicated_server(port: u16, zone: &str) {
-    println!("Booting Bevy server on port {} in zone {}", port, zone);
+async fn spawn_dedicated_server(port: u16, zone: &str, max_players: u16) {
+    info!("Booting Bevy server on port {} in zone {}", port, zone);
 
     let profile = if cfg!(debug_assertions) {
         "debug"
     } else {
         "release"
     };
+
+    info!("Using profile '{}' for dedicated server executable.", profile);
 
     let default_path = format!(
         "./target/{}/dedicated_server{}",
@@ -133,11 +141,11 @@ async fn spawn_dedicated_server(port: u16, zone: &str) {
     match tokio::process::Command::new(&executable_path)
         .env("DS_PORT", port.to_string())
         .env("DS_ZONE", zone)
-        .env("DS_MAX_PLAYERS", "3")
+        .env("DS_MAX_PLAYERS", max_players.to_string())
         .spawn()
     {
-        Ok(_) => println!("Process started successfully."),
-        Err(e) => eprintln!(
+        Ok(_) => info!("Dedicated server started successfully."),
+        Err(e) => error!(
             "CRITICAL ERROR: Failed to launch server at '{}'. Error: {}",
             executable_path, e
         ),

@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 use crate::network::ClientNetworkManager;
 use crate::state::AppState;
+// use tracing::{info};
 
 use tracing::{warn};
 
@@ -60,6 +61,9 @@ fn player_input(keyboard: Res<ButtonInput<KeyCode>>, mut net: ResMut<ClientNetwo
         x += 1.0;
     }
 
+    // if (x, y) != (0.0, 0.0) { 
+    //     info!("Player input: x={}, y={}", x, y);
+    // }
     if x != 0.0 || y != 0.0 {
         let conn_opt = net.server_connection.clone();
         let stream_opt = net.unreliable_stream.clone();

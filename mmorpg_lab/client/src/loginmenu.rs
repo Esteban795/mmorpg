@@ -5,7 +5,8 @@ use bevy_egui::{EguiContexts, EguiPrimaryContextPass, egui};
 use futures_lite::future;
 
 use crate::state::AppState;
-use shared::{LoginRequest, LoginResponse};
+use shared::{DEFAULT_GATEKEEPER_ADDR_PORT, LoginRequest, LoginResponse};
+use tracing::{error, info};
 
 use tracing::{error, info};
 
@@ -35,6 +36,7 @@ impl Plugin for LoginMenuPlugin {
 }
 
 fn setup_camera(mut commands: Commands) {
+    info!("Setting up camera");
     commands.spawn(Camera2d);
 }
 
@@ -102,21 +104,25 @@ fn menu_ui(
                             // Get IO Task pool from Bevy
                             let thread_pool = IoTaskPool::get();
 
+                            info!("Starting login task for user '{}'", settings.username);
+                            let gatekeeper_addr = std::env::var("GATEKEEPER_ADDR_PORT")
+                                .unwrap_or_else(|_| DEFAULT_GATEKEEPER_ADDR_PORT.to_string());
                             let task = thread_pool.spawn(async move {
-                                let mut res = surf::post("http://127.0.0.1:8080/login")
-                                    .body_json(&payload)
-                                    .map_err(|_| "Erreur de formatage JSON".to_string())?
-                                    .await
-                                    .map_err(|e| {
-                                        format!("Impossible de joindre le Gatekeeper: {}", e)
-                                    })?;
+                                let mut res =
+                                    surf::post(&format!("http://{}/login", gatekeeper_addr))
+                                        .body_json(&payload)
+                                        .map_err(|_| "Erreur de formatage JSON".to_string())?
+                                        .await
+                                        .map_err(|e| {
+                                            format!("Can't reach the gatekeeper : {}", e)
+                                        })?;
 
                                 if res.status().is_success() {
                                     res.body_json::<LoginResponse>()
                                         .await
                                         .map_err(|_| "Format de réponse invalide".to_string())
                                 } else {
-                                    Err("Identifiants incorrects ou serveurs pleins".to_string())
+                                    Err("Invalid credentials or the servers are full".to_string())
                                 }
                             });
 
@@ -136,7 +142,7 @@ fn menu_ui(
 
 fn poll_login_task(
     mut commands: Commands,
-    mut query: Query<(Entity, &mut LoginTask)>, // Note le `mut` ici !
+    mut query: Query<(Entity, &mut LoginTask)>,
     mut next_state: ResMut<NextState<AppState>>,
     mut settings: ResMut<ConnectionSettings>,
 ) {
@@ -147,7 +153,7 @@ fn poll_login_task(
             match result {
                 Ok(login_response) => {
                     info!(
-                        "Connexion réussie ! Redirection vers le serveur : {}:{}",
+                        "Successful login! Redirecting to server {}:{}",
                         login_response.server.ip, login_response.server.port
                     );
 
@@ -157,7 +163,7 @@ fn poll_login_task(
                     next_state.set(AppState::InGame);
                 }
                 Err(error_msg) => {
-                    error!("Erreur : {}", error_msg);
+                    error!("Polling login task : {}", error_msg);
                     settings.error_message = Some(error_msg);
                 }
             }
