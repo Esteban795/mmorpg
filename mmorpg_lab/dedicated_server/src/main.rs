@@ -1,13 +1,16 @@
 use bevy::app::ScheduleRunnerPlugin;
 use bevy::prelude::*;
-use bevy_quinnet::server::certificate::CertificateRetrievalMode;
-use bevy_quinnet::server::*;
+use game_sockets::{GameNetworkEvent, GamePeer, GameStream, protocols::QuicBackend};
 
 use shared::{ClientMessage, PlayerState, ServerInfo, ServerMessage};
 use std::collections::HashMap;
-use std::net::{IpAddr, SocketAddr, UdpSocket};
+use std::net::{SocketAddr, UdpSocket};
 use std::time::Duration;
 use uuid::Uuid;
+
+use bytes::Bytes;
+
+use tracing::{debug, error, info, warn};
 
 const DEFAULT_DS_PORT: &str = "8001";
 const DEFAULT_ORCH_PORT: &str = "8000";
@@ -33,14 +36,25 @@ pub struct HeartbeatTimer(Timer);
 pub struct PlayerData {
     pub username: String,
     pub position: Vec2,
+    pub reliable_stream: Option<GameStream>,
+    pub unreliable_stream: Option<GameStream>,
 }
 
 #[derive(Resource, Default)]
 pub struct PlayerRegistry {
-    pub players: HashMap<u64, PlayerData>, // maps the unique client ID to the player's username (client ID given by Quinnet)
+    pub players: HashMap<Uuid, PlayerData>, // Maps client IDs (Uuid given by game_sockets) to player data
+}
+
+#[derive(Resource)]
+pub struct NetworkManager {
+    pub peer: GamePeer,
 }
 
 fn main() {
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
+
     // get port and orchestrator address from environment variables, with defaults
     let port: u16 = std::env::var("DS_PORT")
         .unwrap_or_else(|_| DEFAULT_DS_PORT.to_string())
@@ -73,115 +87,140 @@ fn main() {
     let socket = UdpSocket::bind("0.0.0.0:0").expect("Failed to bind heartbeat socket");
     socket.set_nonblocking(true).unwrap();
 
+    // Initialize GameSocket
+    let backend = QuicBackend::new();
+    let peer = GamePeer::new(backend);
+
+    info!(
+        "DEDICATED SERVER [{}]: Listening on port {}...",
+        config.ip, config.port
+    );
+    if let Err(e) = peer.listen(&config.ip, config.port) {
+        error!(
+            "CRITICAL: Failed to listen on port {}: {:?}",
+            config.port, e
+        );
+        return;
+    }
+
     App::new()
         .add_plugins(
             MinimalPlugins.set(ScheduleRunnerPlugin::run_loop(Duration::from_secs_f64(
                 1.0 / 20.0,
             ))), // updates at 20Hz
         )
-        .add_plugins(QuinnetServerPlugin::default())
         .insert_resource(config)
         .insert_resource(HeartbeatSocket(socket))
         .insert_resource(HeartbeatTimer(Timer::from_seconds(
             5.0,
             TimerMode::Repeating,
         )))
+        .insert_resource(NetworkManager { peer })
         .init_resource::<PlayerRegistry>()
-        .add_systems(Startup, start_server)
         .add_systems(
             Update,
-            (
-                handle_connections,
-                handle_messages,
-                broadcast_aoi,
-                send_heartbeat,
-            )
-                .chain(),
+            (poll_network_events, broadcast_aoi, send_heartbeat).chain(),
         )
         .run();
 }
 
-fn start_server(mut server: ResMut<QuinnetServer>, config: Res<ServerConfig>) {
-    let ip_addr: IpAddr = config.ip.parse().expect("Invalid IP");
-
-    let endpoint_config = ServerEndpointConfiguration {
-        addr_config: EndpointAddrConfiguration::from_ip(ip_addr, config.port),
-        cert_mode: CertificateRetrievalMode::GenerateSelfSigned {
-            server_hostname: config.ip.clone(),
-        },
-        defaultables: Default::default(),
-    };
-
-    if let Err(e) = server.start_endpoint(endpoint_config) {
-        eprintln!(
-            "ERREUR CRITIQUE : Impossible de démarrer l'endpoint QUIC : {:?}",
-            e
-        );
-        return;
-    }
-    println!(
-        "DEDICATED SERVER [{}]: Listening for players on port {}...",
-        config.id, config.port
-    );
-}
-
-// handles all connection and disconnection events, updating the player registry accordingly
-// (even non conventional ways to disconnect like killing the client process or network issues)
-fn handle_connections(
-    mut connection_events: MessageReader<ConnectionEvent>,
-    mut connection_lost_events: MessageReader<ConnectionLostEvent>,
-    mut registry: ResMut<PlayerRegistry>,
-) {
-    for event in connection_events.read() {
-        println!("Incoming QUIC connection established: ID {}", event.id);
-    }
-
-    for event in connection_lost_events.read() {
-        println!("Connection lost for ID {}", event.id);
-        registry.players.remove(&event.id);
-    }
-}
-
-fn handle_messages(mut server: ResMut<QuinnetServer>, mut registry: ResMut<PlayerRegistry>) {
-    let endpoint = server.endpoint_mut();
-
-    for client_id in endpoint.clients() {
-        while let Ok(Some(message)) =
-            endpoint.receive_message_from::<ClientMessage, _>(client_id, 0u8)
-        {
-            match message {
-                ClientMessage::Join { username } => {
-                    println!("Player '{}' (ID {}) joined the game!", username, client_id);
-                    registry.players.insert(
-                        client_id,
-                        PlayerData {
-                            username,
-                            position: Vec2::ZERO,
-                        },
-                    );
-
-                    let _ = endpoint.send_message(
-                        client_id,
-                        ServerMessage::Welcome {
-                            player_id: client_id,
-                        },
-                    );
-                }
-                ClientMessage::MoveInput { x, y } => {
-                    if let Some(player) = registry.players.get_mut(&client_id) {
-                        // Speed = 200 pixels per second, with updates at 20Hz, so we move 10 pixels per tick in the input direction
-                        let speed_per_tick = 200.0 * (1.0 / 20.0);
-                        let direction = Vec2::new(x, y).normalize_or_zero();
-
-                        player.position += direction * speed_per_tick;
-
-                        // Walls at 400 pixels from the center in all directions
-                        player.position = player
-                            .position
-                            .clamp(Vec2::splat(-400.0), Vec2::splat(400.0));
+fn poll_network_events(mut net: ResMut<NetworkManager>, mut registry: ResMut<PlayerRegistry>) {
+    while let Ok(Some(event)) = net.peer.poll() {
+        match event {
+            GameNetworkEvent::Connected(connection) => {
+                info!("[NETWORK] Client connected: {:?}", connection.connection_id);
+                registry.players.insert(
+                    connection.connection_id,
+                    PlayerData {
+                        username: "Unknown".to_string(), // pseudo unknown at connection time, will be updated when receiving the join message from the client
+                        position: Vec2::ZERO,
+                        reliable_stream: None,
+                        unreliable_stream: None,
+                    },
+                );
+            }
+            GameNetworkEvent::StreamCreated(connection, stream) => {
+                if let Some(player) = registry.players.get_mut(&connection.connection_id) {
+                    if stream.is_reliable() {
+                        player.reliable_stream = Some(stream);
+                    } else {
+                        player.unreliable_stream = Some(stream);
                     }
                 }
             }
+            GameNetworkEvent::StreamClosed(connection, stream) => {
+                if let Some(player) = registry.players.get_mut(&connection.connection_id) {
+                    if stream.is_reliable() {
+                        player.reliable_stream = None;
+                    } else {
+                        player.unreliable_stream = None;
+                    }
+                }
+            }
+            GameNetworkEvent::Disconnected(connection) => {
+                info!(
+                    "[NETWORK] Client disconnected: {}",
+                    connection.connection_id
+                );
+                registry.players.remove(&connection.connection_id);
+            }
+            GameNetworkEvent::Message {
+                connection,
+                stream: _,
+                data,
+            } => {
+                match bincode::deserialize::<ClientMessage>(&data) {
+                    Ok(message) => match message {
+                        ClientMessage::Join { username } => {
+                            info!("[GAME] Player {} joined the game !", username);
+                            if let Some(player) =
+                                registry.players.get_mut(&connection.connection_id)
+                            {
+                                player.username = username;
+
+                                // Send welcome message with player ID
+                                let welcome_msg = ServerMessage::Welcome {
+                                    player_id: connection.connection_id,
+                                };
+                                match bincode::serialize(&welcome_msg) {
+                                    Ok(bytes) => {
+                                        if let Some(rel_stream) = &player.reliable_stream {
+                                            if let Err(e) = net.peer.send(
+                                                &connection,
+                                                rel_stream,
+                                                Bytes::from(bytes),
+                                            ) {
+                                                error!("Failed to send Welcome message: {:?}", e);
+                                            }
+                                        }
+                                    }
+                                    Err(e) => {
+                                        error!("Failed to serialize Welcome message: {:?}", e)
+                                    }
+                                }
+                            }
+                        }
+                        ClientMessage::MoveInput { x, y } => {
+                            debug!(
+                                "Input received from {:?} : x={}, y={}",
+                                connection.connection_id, x, y
+                            );
+                            if let Some(player) =
+                                registry.players.get_mut(&connection.connection_id)
+                            {
+                                let speed = 5.0;
+                                player.position.x += x * speed;
+                                player.position.y += y * speed;
+                            }
+                        }
+                    },
+                    Err(e) => warn!(
+                        "[SECURITY] Wrong packet received from {:?} : {}",
+                        connection.connection_id, e
+                    ),
+                }
+            }
+            _ => {}
         }
     }
 }
@@ -223,27 +262,29 @@ fn send_heartbeat(
                     .0
                     .send_to(payload.as_bytes(), config.orchestrator_addr)
                 {
-                    eprintln!("Failed to send heartbeat: {}", e);
+                    error!("Failed to send heartbeat: {}", e);
                 } else {
-                    println!(
+                    info!(
                         "Heartbeat sent (Players: {}/{})",
                         hb.num_players, hb.capacity
                     );
                 }
             }
-            Err(e) => eprintln!("Failed to serialize heartbeat: {}", e),
+            Err(e) => error!("Failed to serialize heartbeat: {}", e),
         }
     }
 }
 
 // Area of interest (AOI) system : every tick, send each player a custom snapshot of all players that are within 400 pixels of them
-fn broadcast_aoi(mut server: ResMut<QuinnetServer>, registry: Res<PlayerRegistry>) {
-    let endpoint = server.endpoint_mut();
+fn broadcast_aoi(net: ResMut<NetworkManager>, registry: Res<PlayerRegistry>) {
     let camera_view_distance = 400.0; // AOI radius in pixels
 
     for (client_id, player_data) in &registry.players {
-        let mut visible_players = Vec::new();
+        let Some(unreliable_stream) = &player_data.unreliable_stream else {
+            continue;
+        };
 
+        let mut visible_players = Vec::new();
         for (other_id, other_data) in &registry.players {
             if player_data.position.distance(other_data.position) < camera_view_distance {
                 visible_players.push(PlayerState {
@@ -255,11 +296,20 @@ fn broadcast_aoi(mut server: ResMut<QuinnetServer>, registry: Res<PlayerRegistry
             }
         }
 
-        let _ = endpoint.send_message(
-            *client_id,
-            ServerMessage::AOISnapshot {
-                players: visible_players,
-            },
-        );
+        let snapshot = ServerMessage::AOISnapshot {
+            players: visible_players,
+        };
+        match bincode::serialize(&snapshot) {
+            Ok(bytes) => {
+                let conn = game_sockets::GameConnection {
+                    connection_id: *client_id,
+                };
+                if let Err(e) = net.peer.send(&conn, unreliable_stream, Bytes::from(bytes)) {
+                    // C'est un datagramme (Unreliable), donc on utilise warn! au lieu de error! si ça rate
+                    warn!("Impossible d'envoyer l'AOI à {:?}: {:?}", client_id, e);
+                }
+            }
+            Err(e) => error!("Erreur de sérialisation du Snapshot: {:?}", e),
+        }
     }
 }

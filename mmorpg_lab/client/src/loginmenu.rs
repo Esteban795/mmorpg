@@ -7,6 +7,8 @@ use futures_lite::future;
 use crate::state::AppState;
 use shared::{LoginRequest, LoginResponse};
 
+use tracing::{error, info};
+
 // Bevy task to run the async login request without blocking main thread
 #[derive(Component)]
 pub struct LoginTask(Task<Result<LoginResponse, String>>);
@@ -144,7 +146,7 @@ fn poll_login_task(
 
             match result {
                 Ok(login_response) => {
-                    println!(
+                    info!(
                         "Connexion réussie ! Redirection vers le serveur : {}:{}",
                         login_response.server.ip, login_response.server.port
                     );
@@ -155,7 +157,7 @@ fn poll_login_task(
                     next_state.set(AppState::InGame);
                 }
                 Err(error_msg) => {
-                    println!("Erreur : {}", error_msg);
+                    error!("Erreur : {}", error_msg);
                     settings.error_message = Some(error_msg);
                 }
             }

@@ -5,16 +5,20 @@ mod state;
 
 use bevy::prelude::*;
 use bevy_egui::EguiPlugin;
-use bevy_quinnet::client::QuinnetClientPlugin;
 use loginmenu::LoginMenuPlugin;
 use network::NetworkPlugin;
 use state::AppState;
 
+use tracing::info;
+
 fn main() {
-    println!("Hello, world!");
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
+
+    info!("Starting Client!");
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_plugins(QuinnetClientPlugin::default())
         .add_plugins(LoginMenuPlugin)
         .add_plugins(EguiPlugin::default())
         .add_plugins(NetworkPlugin)

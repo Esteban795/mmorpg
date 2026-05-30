@@ -8,12 +8,18 @@ bevy = "0.18.1"
 serde = { version = "1.0.228", features = ["derive"] }
 
 # Network dependencies
-bevy_quinnet = { version = "0.20.0", features = ["server", "bincode-messages"] }
 postcard = { version = "1.0.0", features = ["alloc"] }
+bincode = "1.3"
+bytes = "1.0"
 
 # Heartbeat & Orchestrator dependencies
 serde_json = "1.0.149"
-uuid = { version = "1.23.1", features = ["v4"] }
+uuid = { version = "1.23.1", features = ["v4", "serde"] }
 
 # Local workspace dependencies
 shared = { path = "../shared" }
+game_sockets = { path = "../game_sockets"}
+
+#logs 
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

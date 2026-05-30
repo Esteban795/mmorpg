@@ -6,4 +6,10 @@ members = [
     "orchestrator",
     "gatekeeper",
     "shared"
-]
+, "game_sockets"]
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
