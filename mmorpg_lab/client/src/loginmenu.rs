@@ -6,7 +6,6 @@ use futures_lite::future;
 
 use crate::state::AppState;
 use shared::{DEFAULT_GATEKEEPER_ADDR_PORT, LoginRequest, LoginResponse};
-use tracing::{error, info};
 
 use tracing::{error, info};
 

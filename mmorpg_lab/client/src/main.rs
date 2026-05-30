@@ -11,8 +11,6 @@ use state::AppState;
 use tracing::{Level, info};
 use tracing_subscriber::FmtSubscriber;
 
-use tracing::info;
-
 fn main() {
     let subscriber = FmtSubscriber::builder()
         .with_max_level(Level::INFO)

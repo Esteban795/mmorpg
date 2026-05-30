@@ -6,13 +6,11 @@ use shared::{ClientMessage, PlayerState, ServerInfo, ServerMessage};
 use std::collections::HashMap;
 use std::net::{SocketAddr, UdpSocket};
 use std::time::Duration;
-use tracing::{Level, info};
+use tracing::{Level, debug, error, info, warn};
 use tracing_subscriber::FmtSubscriber;
 use uuid::Uuid;
 
 use bytes::Bytes;
-
-use tracing::{debug, error, info, warn};
 
 const DEFAULT_DS_PORT: &str = "8001";
 const DEFAULT_ORCH_PORT: &str = "8000";
@@ -268,7 +266,10 @@ fn send_heartbeat(
             cpu_usage: 0.0,
             mem_usage: 0,
         };
-        info!("Heartbeat info: IP={}, Port={}, Zone={}, Players={}/{}", hb.ip, hb.port, hb.zone, hb.num_players, hb.capacity);
+        info!(
+            "Heartbeat info: IP={}, Port={}, Zone={}, Players={}/{}",
+            hb.ip, hb.port, hb.zone, hb.num_players, hb.capacity
+        );
 
         match serde_json::to_string(&hb) {
             Ok(payload) => {
