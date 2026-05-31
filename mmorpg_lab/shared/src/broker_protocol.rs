@@ -131,7 +131,7 @@ impl BrokerMessage {
                 let y = buf.get_f32_le();
                 Some(BrokerMessage::PositionUpdate { client_id, x, y })
             }
-            _ => None, // Tag inconnu
+            _ => None, // Unknown tag
         }
     }
 }

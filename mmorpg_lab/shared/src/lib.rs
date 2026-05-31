@@ -4,7 +4,6 @@ use redis::{Client, RedisError, aio::MultiplexedConnection};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use tracing::error;
-use uuid::Uuid;
 
 pub const DEFAULT_REDIS_IP: &str = "redis://127.0.0.1";
 pub const DEFAULT_GATEKEEPER_ADDR_PORT: &str = "127.0.0.1:8080";
@@ -28,7 +27,7 @@ impl fmt::Display for ClientMessage {
 // Messages sent from Dedicated Server to Client
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ServerMessage {
-    Welcome { player_id: Uuid },
+    Welcome { player_id: u32 },
     AOISnapshot { players: Vec<PlayerState> },
 }
 
@@ -114,7 +113,7 @@ pub struct SimpleServerInfo {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PlayerState {
-    pub id: Uuid,
+    pub id: u32,
     pub username: String,
     pub x: f32,
     pub y: f32,
