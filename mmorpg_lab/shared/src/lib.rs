@@ -1,8 +1,10 @@
+pub mod broker_protocol;
+
 use redis::{Client, RedisError, aio::MultiplexedConnection};
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 use std::fmt;
-use tracing::{error};
+use tracing::error;
+use uuid::Uuid;
 
 pub const DEFAULT_REDIS_IP: &str = "redis://127.0.0.1";
 pub const DEFAULT_GATEKEEPER_ADDR_PORT: &str = "127.0.0.1:8080";
@@ -33,8 +35,12 @@ pub enum ServerMessage {
 impl fmt::Display for ServerMessage {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ServerMessage::Welcome { player_id } => write!(f, "Welcome {{ player_id: {} }}", player_id),
-            ServerMessage::AOISnapshot { players } => write!(f, "AOISnapshot {{ players: {:?} }}", players),
+            ServerMessage::Welcome { player_id } => {
+                write!(f, "Welcome {{ player_id: {} }}", player_id)
+            }
+            ServerMessage::AOISnapshot { players } => {
+                write!(f, "AOISnapshot {{ players: {:?} }}", players)
+            }
         }
     }
 }
