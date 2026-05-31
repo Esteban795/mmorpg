@@ -1,17 +1,20 @@
 use bevy::prelude::*;
-use bevy_quinnet::client::QuinnetClient;
+use bytes::Bytes;
 use shared::ClientMessage;
 use std::collections::HashMap;
+use uuid::Uuid;
 
+use crate::network::ClientNetworkManager;
 use crate::state::AppState;
-// use tracing::{info};
+
+use tracing::warn;
 
 pub struct GamePlugin;
 
 #[derive(Resource, Default)]
 pub struct GameState {
-    pub my_id: Option<u64>,
-    pub spawned_players: HashMap<u64, Entity>, // maps client ID to the corresponding player entity in the world
+    pub my_id: Option<Uuid>,
+    pub spawned_players: HashMap<Uuid, Entity>, // maps client ID to the corresponding player entity in the world
 }
 
 #[derive(Component)]
@@ -40,7 +43,7 @@ fn setup_map(mut commands: Commands) {
     ));
 }
 
-fn player_input(keyboard: Res<ButtonInput<KeyCode>>, mut client: ResMut<QuinnetClient>) {
+fn player_input(keyboard: Res<ButtonInput<KeyCode>>, mut net: ResMut<ClientNetworkManager>) {
     let mut x = 0.0;
     let mut y = 0.0;
 
@@ -57,12 +60,19 @@ fn player_input(keyboard: Res<ButtonInput<KeyCode>>, mut client: ResMut<QuinnetC
         x += 1.0;
     }
 
-    // if (x, y) != (0.0, 0.0) { 
-    //     info!("Player input: x={}, y={}", x, y);
-    // }
     if x != 0.0 || y != 0.0 {
-        let connection = client.connection_mut();
-        let _ = connection.send_message(ClientMessage::MoveInput { x, y });
+        let conn_opt = net.server_connection.clone();
+        let stream_opt = net.unreliable_stream.clone();
+        if let (Some(peer), Some(conn), Some(stream)) = (&mut net.peer, conn_opt, stream_opt) {
+            let msg = ClientMessage::MoveInput { x, y };
+            if let Ok(bytes) = bincode::serialize(&msg) {
+                if let Err(e) = peer.send(&conn, &stream, Bytes::from(bytes)) {
+                    tracing::warn!("Local input loss : {:?}", e);
+                }
+            }
+        } else {
+            warn!("[CLIENT] : Cannot send input, not fully connected yet.");
+        }
     }
 }
 

@@ -12,7 +12,7 @@ async fn main() {
         .finish();
 
     tracing::subscriber::set_global_default(subscriber)
-        .expect("Erreur fatale : impossible d'initialiser tracing");
+        .expect("Fatal Error: unable to set up logging subscriber");
 
     info!("Starting MMORPG Orchestrator...");
 

@@ -6,6 +6,7 @@ use futures_lite::future;
 
 use crate::state::AppState;
 use shared::{DEFAULT_GATEKEEPER_ADDR_PORT, LoginRequest, LoginResponse};
+
 use tracing::{error, info};
 
 // Bevy task to run the async login request without blocking main thread

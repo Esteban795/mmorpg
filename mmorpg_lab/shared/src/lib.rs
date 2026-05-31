@@ -1,5 +1,6 @@
 use redis::{Client, RedisError, aio::MultiplexedConnection};
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 use std::fmt;
 use tracing::{error};
 
@@ -25,7 +26,7 @@ impl fmt::Display for ClientMessage {
 // Messages sent from Dedicated Server to Client
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ServerMessage {
-    Welcome { player_id: u64 },
+    Welcome { player_id: Uuid },
     AOISnapshot { players: Vec<PlayerState> },
 }
 
@@ -107,7 +108,7 @@ pub struct SimpleServerInfo {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PlayerState {
-    pub id: u64,
+    pub id: Uuid,
     pub username: String,
     pub x: f32,
     pub y: f32,

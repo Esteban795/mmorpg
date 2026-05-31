@@ -5,7 +5,6 @@ mod state;
 
 use bevy::prelude::*;
 use bevy_egui::EguiPlugin;
-use bevy_quinnet::client::QuinnetClientPlugin;
 use loginmenu::LoginMenuPlugin;
 use network::NetworkPlugin;
 use state::AppState;
@@ -18,12 +17,11 @@ fn main() {
         .finish();
 
     tracing::subscriber::set_global_default(subscriber)
-        .expect("Erreur fatale : impossible d'initialiser tracing");
+        .expect("Fatal error : unable to set up logging subscriber");
 
     info!("Starting client...");
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_plugins(QuinnetClientPlugin::default())
         .add_plugins(LoginMenuPlugin)
         .add_plugins(EguiPlugin::default())
         .add_plugins(NetworkPlugin)
