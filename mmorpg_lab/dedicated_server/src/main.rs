@@ -15,7 +15,8 @@ use network::{NetworkManager, NetworkPlugin};
 
 const DEFAULT_DS_PORT: &str = "8001";
 const DEFAULT_ORCH_PORT: &str = "8000";
-const DEFAULT_ZONE: &str = "zone_A";
+const DEFAULT_BROKER_ADDR: &str = "127.0.0.1:8080"; // TODO: change for the proper broker address
+const DEFAULT_ZONE: &str = "shard:0";
 const DEFAULT_MAX_PLAYERS: &str = "100";
 
 #[derive(Resource)]
@@ -26,6 +27,7 @@ pub struct ServerConfig {
     pub zone: String,
     pub max_players: u16,
     pub orchestrator_addr: SocketAddr,
+    pub broker_addr: SocketAddr,
 }
 
 fn main() {
@@ -53,9 +55,16 @@ fn main() {
         .expect("Invalid ORCH_ADDR");
 
     info!("Orchestrator address: {}", orchestrator_addr);
-    // get zone from environment variable, defaulting to "zone_A" if not set
-    let zone = std::env::var("DS_ZONE").unwrap_or_else(|_| DEFAULT_ZONE.to_string());
 
+    let broker_addr: SocketAddr = std::env::var("BROKER_ADDR")
+        .unwrap_or_else(|_| DEFAULT_BROKER_ADDR.to_string())
+        .parse()
+        .expect("Invalid BROKER_ADDR");
+
+    info!("Broker address: {}", broker_addr);
+
+    // get zone from environment variable, defaulting to DEFAULT_ZONE if not set
+    let zone = std::env::var("DS_ZONE").unwrap_or_else(|_| DEFAULT_ZONE.to_string());
     info!("Server zone: {}", zone);
 
     // get max players from environment variable, defaulting to 100 if not set
@@ -73,25 +82,28 @@ fn main() {
         zone,
         max_players,
         orchestrator_addr,
+        broker_addr,
     };
 
     // BIND UDP SOCKET FOR HEARTBEAT
     let socket = UdpSocket::bind("0.0.0.0:0").expect("Failed to bind heartbeat socket");
     socket.set_nonblocking(true).unwrap();
 
-    // INIT GAME PEER FOR CLIENT CONNECTIONS
+    // INIT GAME PEER FOR BROKER CONNECTION
     let backend = QuicBackend::new();
     let peer = GamePeer::new(backend);
 
     info!(
-        "DEDICATED SERVER [{}]: Listening on port {}...",
-        config.ip, config.port
+        "DEDICATED SERVER [{}]: Connecting to Broker at {}...",
+        config.zone, config.broker_addr
     );
-    if let Err(e) = peer.listen(&config.ip, config.port) {
-        error!(
-            "CRITICAL: Failed to listen on port {}: {:?}",
-            config.port, e
-        );
+
+    // Trying to connect dedicated_server to the broker (like a client)
+    if let Err(e) = peer.connect(
+        &config.broker_addr.ip().to_string(),
+        config.broker_addr.port(),
+    ) {
+        error!("CRITICAL: Failed to connect to Broker: {:?}", e);
         return;
     }
 
@@ -105,6 +117,11 @@ fn main() {
         .add_plugins(HeartbeatPlugin)
         .insert_resource(config)
         .insert_resource(HeartbeatSocket(socket))
-        .insert_resource(NetworkManager { peer })
+        .insert_resource(NetworkManager {
+            peer,
+            broker_connection: None,
+            reliable_stream: None,
+            unreliable_stream: None,
+        })
         .run();
 }

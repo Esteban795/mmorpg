@@ -1,177 +1,219 @@
 use bevy::prelude::*;
 use bytes::Bytes;
-use game_sockets::{GameConnection, GameNetworkEvent, GamePeer, GameStream};
+use game_sockets::{GameConnection, GameNetworkEvent, GamePeer, GameStream, GameStreamReliability};
+use shared::broker_protocol::{BrokerMessage, string_to_topic};
 use shared::{ClientMessage, PlayerState, ServerMessage};
 use std::collections::HashMap;
-use tracing::{debug, error, info, warn};
-use uuid::Uuid;
+use tracing::{error, info, warn};
+
+use crate::ServerConfig;
 
 pub struct PlayerData {
     pub username: String,
     pub position: Vec2,
-    pub reliable_stream: Option<GameStream>,
-    pub unreliable_stream: Option<GameStream>,
 }
 
 #[derive(Resource, Default)]
 pub struct PlayerRegistry {
-    pub players: HashMap<Uuid, PlayerData>, // Maps client IDs (Uuid given by game_sockets) to player data
+    pub players: HashMap<u32, PlayerData>, // Maps client IDs (u32 given by the broker, matching the game_socket connection Uuid) to player data
 }
 
 #[derive(Resource)]
 pub struct NetworkManager {
     pub peer: GamePeer,
+    pub broker_connection: Option<GameConnection>,
+    pub reliable_stream: Option<GameStream>,
+    pub unreliable_stream: Option<GameStream>,
 }
 
 pub struct NetworkPlugin;
 
 impl Plugin for NetworkPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<PlayerRegistry>()
-            .add_systems(Update, (poll_network_events, broadcast_aoi).chain());
+        app.init_resource::<PlayerRegistry>().add_systems(
+            Update,
+            (poll_network_events, broadcast_aoi_and_positions).chain(),
+        );
     }
 }
 
 fn poll_network_events(mut net: ResMut<NetworkManager>, mut registry: ResMut<PlayerRegistry>) {
     while let Ok(Some(event)) = net.peer.poll() {
         match event {
+            // Connection event WITH THE BROKER
             GameNetworkEvent::Connected(connection) => {
-                info!("[NETWORK] Client connected: {:?}", connection.connection_id);
-                registry.players.insert(
-                    connection.connection_id,
-                    PlayerData {
-                        username: "Unknown".to_string(), // pseudo unknown at connection time, will be updated when receiving the join message from the client
-                        position: Vec2::ZERO,
-                        reliable_stream: None,
-                        unreliable_stream: None,
-                    },
-                );
-            }
-            GameNetworkEvent::StreamCreated(connection, stream) => {
-                if let Some(player) = registry.players.get_mut(&connection.connection_id) {
-                    if stream.is_reliable() {
-                        player.reliable_stream = Some(stream);
-                    } else {
-                        player.unreliable_stream = Some(stream);
-                    }
-                }
-            }
-            GameNetworkEvent::StreamClosed(connection, stream) => {
-                if let Some(player) = registry.players.get_mut(&connection.connection_id) {
-                    if stream.is_reliable() {
-                        player.reliable_stream = None;
-                    } else {
-                        player.unreliable_stream = None;
-                    }
-                }
-            }
-            GameNetworkEvent::Disconnected(connection) => {
                 info!(
-                    "[NETWORK] Client disconnected: {}",
+                    "[NETWORK] Connected to Broker: {:?}",
                     connection.connection_id
                 );
-                registry.players.remove(&connection.connection_id);
+                net.broker_connection = Some(connection);
+
+                // Ask the Broker to open our 2 communication lanes
+                if let Err(e) = net
+                    .peer
+                    .create_stream(connection, GameStreamReliability::Reliable)
+                {
+                    error!("Failed to create reliable stream: {:?}", e);
+                }
+                if let Err(e) = net
+                    .peer
+                    .create_stream(connection, GameStreamReliability::Unreliable)
+                {
+                    error!("Failed to create unreliable stream: {:?}", e);
+                }
             }
-            GameNetworkEvent::Message {
-                connection,
-                stream: _,
-                data,
-            } => {
-                handle_client_message(&connection, &data, &mut registry, &mut net);
+            // Broker lanes are ready
+            GameNetworkEvent::StreamCreated(_connection, stream) => {
+                if stream.is_reliable() {
+                    info!("[NETWORK] Reliable stream to Broker is ready.");
+                    net.reliable_stream = Some(stream);
+                } else {
+                    info!("[NETWORK] Unreliable stream to Broker is ready.");
+                    net.unreliable_stream = Some(stream);
+                }
+            }
+            // Broker lanes are closed
+            GameNetworkEvent::StreamClosed(_connection, stream) => {
+                if stream.is_reliable() {
+                    info!("[NETWORK] Reliable stream to Broker is closed.");
+                    net.reliable_stream = None;
+                } else {
+                    info!("[NETWORK] Unreliable stream to Broker is closed.");
+                    net.unreliable_stream = None;
+                }
+            }
+            GameNetworkEvent::Disconnected(_connection) => {
+                error!("[NETWORK] Lost connection to the Broker!");
+                net.broker_connection = None;
+            }
+            // Receiving messages FROM THE BROKER
+            GameNetworkEvent::Message { data, .. } => {
+                // First, unwrap the Broker protocol envelope
+                if let Some(broker_msg) = BrokerMessage::from_bytes(&data) {
+                    handle_broker_message(broker_msg, &mut registry);
+                } else {
+                    warn!("[NETWORK] Received malformed Broker message.");
+                }
             }
             _ => {}
         }
     }
 }
 
-// -------------------------------------------------------------------------
-// Read and handle messages from clients. For now : JOIN and MOVE_INPUT
-// -------------------------------------------------------------------------
-fn handle_client_message(
-    connection: &GameConnection,
-    data: &[u8],
-    registry: &mut PlayerRegistry,
-    net: &mut NetworkManager,
-) {
-    match bincode::deserialize::<ClientMessage>(data) {
-        Ok(message) => match message {
-            ClientMessage::Join { username } => {
-                info!("[GAME] Player {} joined the game !", username);
-                if let Some(player) = registry.players.get_mut(&connection.connection_id) {
-                    player.username = username;
-
-                    // Send welcome message with player ID
-                    let welcome_msg = ServerMessage::Welcome {
-                        player_id: connection.connection_id,
-                    };
-                    match bincode::serialize(&welcome_msg) {
-                        Ok(bytes) => {
-                            if let Some(rel_stream) = &player.reliable_stream {
-                                if let Err(e) =
-                                    net.peer.send(connection, rel_stream, Bytes::from(bytes))
-                                {
-                                    error!("Failed to send Welcome message: {:?}", e);
-                                }
-                            }
+// ----------------------------------------------------------------------------------------------------------------------------------------
+// Read and handle messages from the Broker. For now : JOIN and MOVE_INPUT from clients, wrapped in the BrokerMessage::ClientInput variant.
+// ----------------------------------------------------------------------------------------------------------------------------------------
+fn handle_broker_message(message: BrokerMessage, registry: &mut PlayerRegistry) {
+    match message {
+        // The Broker routes inputs to the game server
+        // It contains the client_id (u32) and the payload (16 bytes).
+        BrokerMessage::ClientInput { client_id, input } => {
+            // Decode the inner game payload
+            if let Ok(client_msg) = bincode::deserialize::<ClientMessage>(&input) {
+                match client_msg {
+                    ClientMessage::Join { username } => {
+                        info!(
+                            "[GAME] Player {} (ID: {}) joined the shard!",
+                            username, client_id
+                        );
+                        registry.players.insert(
+                            client_id,
+                            PlayerData {
+                                username,
+                                position: Vec2::ZERO, // TODO: update with proper spawn point logic (with handoff)
+                            },
+                        );
+                        // TODO: Welcome message logic is skipped here.
+                        // Usually, the Spatial Server handles telling the client where they are.
+                    }
+                    ClientMessage::MoveInput { x, y } => {
+                        if let Some(player) = registry.players.get_mut(&client_id) {
+                            let speed = 5.0;
+                            player.position.x += x * speed;
+                            player.position.y += y * speed;
+                        } else {
+                            // If player doesn't exist, we might have missed the Join message
+                            // Implicitly spawn them for safety
+                            registry.players.insert(
+                                client_id,
+                                PlayerData {
+                                    username: "Ghost".to_string(),
+                                    position: Vec2::ZERO,
+                                },
+                            );
                         }
-                        Err(e) => error!("Failed to serialize Welcome message: {:?}", e),
                     }
                 }
             }
-            ClientMessage::MoveInput { x, y } => {
-                debug!(
-                    "Input received from {:?} : x={}, y={}",
-                    connection.connection_id, x, y
-                );
-                if let Some(player) = registry.players.get_mut(&connection.connection_id) {
-                    let speed = 5.0;
-                    player.position.x += x * speed;
-                    player.position.y += y * speed;
-                }
-            }
-        },
-        Err(e) => warn!(
-            "[SECURITY] Wrong packet received from {:?} : {}",
-            connection.connection_id, e
-        ),
+        }
+        _ => {}
     }
 }
 
-// Area of interest (AOI) system : every tick, send each player a custom snapshot of all players that are within 400 pixels of them
-fn broadcast_aoi(net: ResMut<NetworkManager>, registry: Res<PlayerRegistry>) {
-    let camera_view_distance = 400.0; // AOI radius in pixels
+// -------------------------------------------------------------------------
+// AOI & Spatial Updates
+// -------------------------------------------------------------------------
+fn broadcast_aoi_and_positions(
+    net: ResMut<NetworkManager>,
+    registry: Res<PlayerRegistry>,
+    config: Res<ServerConfig>,
+) {
+    let Some(broker_conn) = &net.broker_connection else {
+        return;
+    };
+    let Some(unrel_stream) = &net.unreliable_stream else {
+        return;
+    };
 
+    let mut all_players = Vec::new();
+
+    // ============ Send Position Updates for the Spatial Server (Tag 0x10) ===========
     for (client_id, player_data) in &registry.players {
-        let Some(unreliable_stream) = &player_data.unreliable_stream else {
-            continue;
+        all_players.push(PlayerState {
+            id: *client_id,
+            username: player_data.username.clone(),
+            x: player_data.position.x,
+            y: player_data.position.y,
+        });
+
+        // Notify the Spatial Server of the exact coordinates
+        let pos_update = BrokerMessage::PositionUpdate {
+            client_id: *client_id,
+            x: player_data.position.x,
+            y: player_data.position.y,
         };
 
-        let mut visible_players = Vec::new();
-        for (other_id, other_data) in &registry.players {
-            if player_data.position.distance(other_data.position) < camera_view_distance {
-                visible_players.push(PlayerState {
-                    id: *other_id,
-                    username: other_data.username.clone(),
-                    x: other_data.position.x,
-                    y: other_data.position.y,
-                });
-            }
-        }
+        let _ = net.peer.send(
+            broker_conn,
+            unrel_stream,
+            Bytes::from(pos_update.to_bytes()),
+        );
+    }
 
-        let snapshot = ServerMessage::AOISnapshot {
-            players: visible_players,
-        };
-        match bincode::serialize(&snapshot) {
-            Ok(bytes) => {
-                let conn = game_sockets::GameConnection {
-                    connection_id: *client_id,
-                };
-                if let Err(e) = net.peer.send(&conn, unreliable_stream, Bytes::from(bytes)) {
-                    // unreliable datagram : if it fails to send, we just skip it and wait for the next one, no big deal
-                    warn!("Impossible d'envoyer l'AOI à {:?}: {:?}", client_id, e);
-                }
+    if all_players.is_empty() {
+        return;
+    }
+
+    // ============ Publish the Global AOI of this Shard (Tag 0x03) ===========
+    let snapshot = ServerMessage::AOISnapshot {
+        players: all_players,
+    };
+
+    match bincode::serialize(&snapshot) {
+        Ok(payload) => {
+            let publish_msg = BrokerMessage::Publish {
+                topic: string_to_topic(&config.zone),
+                payload,
+            };
+
+            if let Err(e) = net.peer.send(
+                broker_conn,
+                unrel_stream,
+                Bytes::from(publish_msg.to_bytes()),
+            ) {
+                warn!("Failed to publish AOI to Broker: {:?}", e);
             }
-            Err(e) => error!("Erreur de sérialisation du Snapshot: {:?}", e),
         }
+        Err(e) => error!("Failed to serialize AOI Snapshot: {:?}", e),
     }
 }
