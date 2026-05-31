@@ -6,9 +6,8 @@ use uuid::Uuid;
 
 use crate::network::ClientNetworkManager;
 use crate::state::AppState;
-// use tracing::{info};
 
-use tracing::{warn};
+use tracing::warn;
 
 pub struct GamePlugin;
 

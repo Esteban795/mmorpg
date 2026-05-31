@@ -1,5 +1,6 @@
 use crate::GameNetworkEvent::StreamCreated;
-use crate::GameStreamReliability::{Reliable, Unreliable};
+use crate::GameStreamReliability::Reliable;
+//use crate::GameStreamReliability::Unreliable;
 use crate::{
     BackendCommand, GameNetworkEvent, GameSocketBackend, GameSocketError, GameStream,
     GameStreamReliability,
@@ -15,7 +16,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::runtime::Runtime;
 use tokio::sync::mpsc;
 use tracing::error;
-use tracing::log::{debug, log};
+//use tracing::log::{debug, log};
 use uuid::Uuid;
 
 struct SkipServerVerification;
