@@ -4,6 +4,7 @@ use game_sockets::{
     GameConnection, GameNetworkEvent, GamePeer, GameStream, GameStreamReliability,
     protocols::QuicBackend,
 };
+use shared::broker_protocol::BrokerMessage;
 use shared::{ClientMessage, ServerMessage};
 
 use crate::loginmenu::ConnectionSettings;
@@ -29,6 +30,7 @@ impl Plugin for NetworkPlugin {
     }
 }
 
+// Creates game_socket connection to the given server (in fact to the broker)
 fn start_connection(
     mut net: ResMut<ClientNetworkManager>,
     mut settings: ResMut<ConnectionSettings>,
@@ -94,8 +96,7 @@ fn handle_network(
     }
 }
 
-
-// This function handles the creation of new streams from the server. It distinguishes between reliable and unreliable streams,
+// This function handles the creation of new streams from the broker. It distinguishes between reliable and unreliable streams,
 fn handle_stream_created(
     conn: GameConnection,
     stream: GameStream,
@@ -114,10 +115,18 @@ fn handle_stream_created(
         };
         match bincode::serialize(&msg) {
             Ok(bytes) => {
+                // Send the join message to the server via the reliable stream
+                let mut input_array = [0u8; 16];
+                let len = bytes.len().min(16);
+                input_array[..len].copy_from_slice(&bytes[..len]);
+
+                let broker_msg = BrokerMessage::ClientInput {
+                    client_id: 0, // TODO: wait for the broker's welcome message to get the actual client ID before sending inputs
+                    input: input_array,
+                };
+
                 if let Some(peer) = &mut net.peer {
-                    if let Err(e) = peer.send(&conn, &stream, Bytes::from(bytes)) {
-                        error!("Error sending join message : {:?}", e);
-                    }
+                    let _ = peer.send(&conn, &stream, Bytes::from(broker_msg.to_bytes()));
                 }
             }
             Err(e) => error!("Error serializing join message : {:?}", e),
@@ -128,10 +137,23 @@ fn handle_stream_created(
         // Send fake input to wake up the stream and make sure it's ready for low-latency messages
         //(and show all players in the AOI right after login, without waiting for the first real input from the player)
         let wake_up_msg = ClientMessage::MoveInput { x: 0.0, y: 0.0 };
-        if let Ok(bytes) = bincode::serialize(&wake_up_msg) {
-            if let Some(peer) = &mut net.peer {
-                let _ = peer.send(&conn, &stream, Bytes::from(bytes));
+        match bincode::serialize(&wake_up_msg) {
+            Ok(bytes) => {
+                // Send the first MoveInput message to the server via the reliable stream
+                let mut input_array = [0u8; 16];
+                let len = bytes.len().min(16);
+                input_array[..len].copy_from_slice(&bytes[..len]);
+
+                let broker_msg = BrokerMessage::ClientInput {
+                    client_id: 0, // TODO: wait for the broker's welcome message to get the actual client ID before sending inputs
+                    input: input_array,
+                };
+
+                if let Some(peer) = &mut net.peer {
+                    let _ = peer.send(&conn, &stream, Bytes::from(broker_msg.to_bytes()));
+                }
             }
+            Err(e) => error!("Error serializing MoveInput message : {:?}", e),
         }
     }
 }
@@ -144,21 +166,30 @@ fn handle_server_message(
     game_state: &mut crate::game::GameState,
     transforms: &mut Query<&mut Transform>,
 ) {
-    let Ok(message) = bincode::deserialize::<ServerMessage>(data) else {
-        warn!("[CLIENT] Impossible to read the packet coming from the server.");
+    // Deserialize the broker message from the received bytes. If deserialization fails, log a warning and ignore the message.
+    let Some(broker_message) = BrokerMessage::from_bytes(data) else {
+        warn!("[CLIENT] Invalid broker envelope received.");
         return;
     };
 
-    match message {
-        ServerMessage::Welcome { player_id } => {
-            info!(
-                "[CLIENT]: Welcome message received with player ID: {}",
-                player_id
-            );
-            game_state.my_id = Some(player_id);
+    match broker_message {
+        BrokerMessage::Broadcast { payload } => {
+            if let Ok(server_msg) = bincode::deserialize::<ServerMessage>(&payload) {
+                match server_msg {
+                    ServerMessage::Welcome { player_id } => {
+                        info!("[CLIENT]: Welcome ! My ID is: {}", player_id);
+                        game_state.my_id = Some(player_id);
+                    }
+                    ServerMessage::AOISnapshot { players } => {
+                        crate::network::handle_aoi_snapshot(
+                            players, commands, game_state, transforms,
+                        );
+                    }
+                }
+            }
         }
-        ServerMessage::AOISnapshot { players } => {
-            handle_aoi_snapshot(players, commands, game_state, transforms);
+        _ => {
+            // The client ignores other types of messages from the broker
         }
     }
 }

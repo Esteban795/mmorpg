@@ -1,20 +1,18 @@
 use bevy::prelude::*;
 use bytes::Bytes;
 use shared::ClientMessage;
+use shared::broker_protocol::BrokerMessage;
 use std::collections::HashMap;
-use uuid::Uuid;
 
 use crate::network::ClientNetworkManager;
 use crate::state::AppState;
-
-use tracing::warn;
 
 pub struct GamePlugin;
 
 #[derive(Resource, Default)]
 pub struct GameState {
-    pub my_id: Option<Uuid>,
-    pub spawned_players: HashMap<Uuid, Entity>, // maps client ID to the corresponding player entity in the world
+    pub my_id: Option<u32>,
+    pub spawned_players: HashMap<u32, Entity>, // maps client ID to the corresponding player entity in the world
 }
 
 #[derive(Component)]
@@ -43,7 +41,11 @@ fn setup_map(mut commands: Commands) {
     ));
 }
 
-fn player_input(keyboard: Res<ButtonInput<KeyCode>>, mut net: ResMut<ClientNetworkManager>) {
+fn player_input(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut net: ResMut<ClientNetworkManager>,
+    game_state: Res<GameState>,
+) {
     let mut x = 0.0;
     let mut y = 0.0;
 
@@ -63,15 +65,25 @@ fn player_input(keyboard: Res<ButtonInput<KeyCode>>, mut net: ResMut<ClientNetwo
     if x != 0.0 || y != 0.0 {
         let conn_opt = net.server_connection.clone();
         let stream_opt = net.unreliable_stream.clone();
+
+        let my_id = game_state.my_id.unwrap_or(0);
+
         if let (Some(peer), Some(conn), Some(stream)) = (&mut net.peer, conn_opt, stream_opt) {
             let msg = ClientMessage::MoveInput { x, y };
             if let Ok(bytes) = bincode::serialize(&msg) {
-                if let Err(e) = peer.send(&conn, &stream, Bytes::from(bytes)) {
+                let mut input_array = [0u8; 16];
+                let len = bytes.len().min(16);
+                input_array[..len].copy_from_slice(&bytes[..len]);
+
+                let broker_msg = BrokerMessage::ClientInput {
+                    client_id: my_id,
+                    input: input_array,
+                };
+
+                if let Err(e) = peer.send(&conn, &stream, Bytes::from(broker_msg.to_bytes())) {
                     tracing::warn!("Local input loss : {:?}", e);
                 }
             }
-        } else {
-            warn!("[CLIENT] : Cannot send input, not fully connected yet.");
         }
     }
 }
