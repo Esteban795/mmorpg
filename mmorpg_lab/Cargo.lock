@@ -6582,6 +6582,7 @@ name = "shared"
 version = "0.1.0"
 dependencies = [
  "bincode",
+ "bytes 1.11.1",
  "redis",
  "serde",
  "tracing",
