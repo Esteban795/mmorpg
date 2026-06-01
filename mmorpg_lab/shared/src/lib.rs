@@ -10,7 +10,8 @@ pub const DEFAULT_GATEKEEPER_ADDR_PORT: &str = "127.0.0.1:8080";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ClientMessage {
-    Join { username: String },
+    //Use a custom fixed-size username to have enough room in the payload.
+    Join { username: [u8; 12] },
     // For the AOI, direction vector (x = -1 for right/y = -1 for down, 0 for no movement, x = +1 for left/y = +1 for up)
     MoveInput { x: f32, y: f32 },
 }
@@ -18,7 +19,10 @@ pub enum ClientMessage {
 impl fmt::Display for ClientMessage {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ClientMessage::Join { username } => write!(f, "Join {{ username: {} }}", username),
+            ClientMessage::Join { username } => {
+                let name = String::from_utf8_lossy(username);
+                write!(f, "Join {{ username: {} }}", name)
+            },
             ClientMessage::MoveInput { x, y } => write!(f, "MoveInput {{ x: {}, y: {} }}", x, y),
         }
     }

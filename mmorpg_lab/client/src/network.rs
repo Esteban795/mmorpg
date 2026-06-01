@@ -110,8 +110,13 @@ fn handle_stream_created(
             settings.username
         );
 
+        let mut username_bytes = [0u8; 12];
+        let name_bytes = settings.username.as_bytes();
+        let len = name_bytes.len().min(12);
+        username_bytes[..len].copy_from_slice(&name_bytes[..len]);
+
         let msg = ClientMessage::Join {
-            username: settings.username.clone(),
+            username: username_bytes,
         };
         match bincode::serialize(&msg) {
             Ok(bytes) => {
