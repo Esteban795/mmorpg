@@ -1,4 +1,5 @@
 pub mod broker_protocol;
+pub mod orchestrator_protocol;
 
 use redis::{Client, RedisError, aio::MultiplexedConnection};
 use serde::{Deserialize, Serialize};
