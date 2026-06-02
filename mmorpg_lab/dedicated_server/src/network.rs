@@ -112,17 +112,22 @@ fn handle_broker_message(message: BrokerMessage, registry: &mut PlayerRegistry) 
             if let Ok(client_msg) = bincode::deserialize::<ClientMessage>(&input) {
                 match client_msg {
                     ClientMessage::Join { username } => {
-                        info!(
-                            "[GAME] Player {} (ID: {}) joined the shard!",
-                            username, client_id
-                        );
-                        registry.players.insert(
-                            client_id,
-                            PlayerData {
-                                username,
-                                position: Vec2::ZERO, // TODO: update with proper spawn point logic (with handoff)
-                            },
-                        );
+                        let clean_username = String::from_utf8_lossy(&username)
+                        .trim_end_matches('\0')
+                        .to_string();
+
+                    info!(
+                        "[GAME] Player {} (ID: {}) joined the shard!",
+                        clean_username, client_id
+                    );
+                    
+                    registry.players.insert(
+                        client_id,
+                        PlayerData {
+                            username: clean_username,
+                            position: Vec2::ZERO, 
+                        },
+                    );
                         // TODO: Welcome message logic is skipped here.
                         // Usually, the Spatial Server handles telling the client where they are.
                     }

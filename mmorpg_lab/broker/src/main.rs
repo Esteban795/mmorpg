@@ -9,8 +9,7 @@ use game_sockets::{GamePeer, protocols::QuicBackend};
 use crate::state::BrokerState;
 use crate::network::BrokerNetwork;
 use crate::routing::process_network_events;
-
-const DEFAULT_BROKER_PORT: u16 = 9000;
+use shared::DEFAULT_BROKER_PORT;
 
 fn main() {
     // Initialize the Quic Backend
