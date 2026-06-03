@@ -7,7 +7,7 @@ pub const TAG_SPLIT_DONE: u8 = 0x03;
 
 #[derive(Debug, Clone)]
 pub enum OrchestratorMessage {
-    RequestSplit { shard_id: u32 },
+    RequestSplit { shard_id: u32 , new_shards_ids : [u32 ; 4]},
     SplitConfirmation { shard_id: u32, new_shard_id: u32 },
     SplitDone { shard_id: u32, new_shard_id: u32 },
 }
@@ -16,9 +16,12 @@ impl OrchestratorMessage {
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut buf = BytesMut::new();
         match self {
-            OrchestratorMessage::RequestSplit { shard_id } => {
+            OrchestratorMessage::RequestSplit { shard_id, new_shards_ids } => {
                 buf.put_u8(TAG_REQUEST_SPLIT);
                 buf.put_u32_le(*shard_id);
+                for &id in new_shards_ids {
+                    buf.put_u32_le(id);
+                }
             }
             OrchestratorMessage::SplitConfirmation {
                 shard_id,
@@ -52,7 +55,16 @@ impl OrchestratorMessage {
                     return None;
                 }
                 let shard_id = buf.get_u32_le();
-                Some(OrchestratorMessage::RequestSplit { shard_id })
+
+                // Read the new shard IDs
+                let mut new_shards_ids = [0u32; 4];
+                for i in 0..4 {
+                    if buf.remaining() < 4 {
+                        return None;
+                    }
+                    new_shards_ids[i] = buf.get_u32_le();
+                }
+                Some(OrchestratorMessage::RequestSplit { shard_id, new_shards_ids })
             }
             TAG_SPLIT_CONFIRMATION => {
                 if buf.remaining() < 8 {

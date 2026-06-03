@@ -347,8 +347,10 @@ impl SpatialService {
     }
 
     fn request_orchestrator_split(&self, split_data: SplitData) {
+        // Gather new child shard IDs from the split data
         let msg = OrchestratorMessage::RequestSplit {
             shard_id: split_data.parent_shard_id,
+            new_shards_ids: split_data.new_shards_ids,
         };
 
         if let Some(quic_orchestrator) = &self.quic_orchestrator {

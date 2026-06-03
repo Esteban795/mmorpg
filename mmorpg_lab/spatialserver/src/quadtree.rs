@@ -12,7 +12,7 @@ pub enum ShardStatus {
 
 pub struct SplitData {
     pub parent_shard_id: u32,
-    pub new_shards: Vec<(u32, Rect)>, // IDs of newly created shards and their bounds
+    pub new_shards_ids: [u32; 4], // IDs of newly created shards
 }
 
 pub struct InsertResult {
@@ -218,18 +218,11 @@ impl QuadTree {
             }
         }
 
-        let new_shards = vec![
-            (id_nw, children[0].bounds),
-            (id_ne, children[1].bounds),
-            (id_sw, children[2].bounds),
-            (id_se, children[3].bounds),
-        ];
-
         self.children = Some(children);
 
         SplitData {
             parent_shard_id: parent_id,
-            new_shards,
+            new_shards_ids: [id_nw, id_ne, id_sw, id_se],
         }
     }
 
