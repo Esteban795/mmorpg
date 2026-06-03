@@ -8,3 +8,6 @@ geo-types = "0.7.19"
 tracing = "0.1.44"
 tracing-subscriber = "0.3.23"
 game_sockets = { path = "../game_sockets"}
+shared = { path = "../shared" }
+uuid = "1.23.2"
+bytes = "1.11.1"
