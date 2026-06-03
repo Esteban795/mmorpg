@@ -23,11 +23,32 @@ fn main() {
 
     let mut reliable_stream: Option<GameStream> = None;
     let mut unreliable_stream: Option<GameStream> = None;
-    let mut conn : Option<GameConnection> =  None;
+    let mut conn: Option<GameConnection> = None;
 
     let mut x = 12.0;
     let mut y = 12.0;
+    let mut should_send = false;
     loop {
+        if should_send && x % 1000.0 == 0.0 {
+            let client_id = 12;
+            let update_msg = BrokerMessage::PositionUpdate { client_id, x, y };
+
+            if let Some(connection) = &conn {
+                info!(
+                    "Sending PositionUpdate to client {}: x={}, y={} on connection {:?}",
+                    client_id, x, y, connection
+                );
+                if let Some(ref unrel_stream) = unreliable_stream {
+                    if let Err(e) = peer.send(
+                        &connection,
+                        &unrel_stream,
+                        Bytes::from(update_msg.to_bytes()),
+                    ) {
+                        error!("Failed to send message on unreliable stream: {:?}", e);
+                    }
+                }
+            }
+        }
         while let Ok(Some(event)) = peer.poll() {
             match event {
                 GameNetworkEvent::Connected(connection) => {
@@ -45,6 +66,18 @@ fn main() {
                             connection.connection_id
                         );
                     }
+
+                    if let Ok(_) = peer.create_stream(connection, GameStreamReliability::Unreliable) {
+                        info!(
+                            "Unreliable stream created for client {}",
+                            connection.connection_id
+                        );
+                    } else {
+                        error!(
+                            "Failed to create unreliable stream for client {}",
+                            connection.connection_id
+                        );
+                    }
                 }
                 GameNetworkEvent::StreamCreated(connection, stream) => {
                     info!(
@@ -55,7 +88,7 @@ fn main() {
                     );
                     match stream.is_reliable() {
                         true => {
-                            reliable_stream = Some(stream);
+                            reliable_stream = Some(stream); 
                             if let Some(ref rel_stream) = reliable_stream {
                                 let msg = BrokerMessage::PositionUpdate {
                                     client_id: 12,
@@ -67,12 +100,25 @@ fn main() {
                                 {
                                     error!("Failed to send message on reliable stream: {:?}", e);
                                 }
-                            }
+                            }  
                         }
                         false => {
-
+                            unreliable_stream = Some(stream);
+                            if let Some(ref unrel_stream) = unreliable_stream {
+                                let msg = BrokerMessage::PositionUpdate {
+                                    client_id: 12,
+                                    x: x,
+                                    y: y,
+                                };
+                                if let Err(e) =
+                                    peer.send(&connection, &unrel_stream, Bytes::from(msg.to_bytes()))
+                                {
+                                    error!("Failed to send message on reliable stream: {:?}", e);
+                                }
+                            }
                         }
                     }
+                    should_send = true;
                 }
                 GameNetworkEvent::StreamClosed(connection, stream) => {
                     info!(
@@ -88,10 +134,11 @@ fn main() {
                     );
                 }
                 GameNetworkEvent::Message {
-                    connection,
-                    stream,
+                    connection: _,
+                    stream : _,
                     data,
                 } => {
+                    let connection = conn.unwrap();
                     info!(
                         "[NETWORK] Message received from client {}: {} bytes",
                         connection.connection_id,
@@ -147,5 +194,7 @@ fn main() {
             }
         }
         std::thread::sleep(std::time::Duration::from_millis(16));
+        x += 5.0;
+        y += 5.0;
     }
 }

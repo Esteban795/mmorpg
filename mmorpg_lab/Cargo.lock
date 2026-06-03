@@ -3108,6 +3108,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "fakebroker"
+version = "0.1.0"
+dependencies = [
+ "bytes 1.11.1",
+ "game_sockets",
+ "shared",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "fastrand"
 version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6755,10 +6766,13 @@ dependencies = [
 name = "spatialserver"
 version = "0.1.0"
 dependencies = [
+ "bytes 1.11.1",
  "game_sockets",
  "geo-types",
+ "shared",
  "tracing",
  "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]

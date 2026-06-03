@@ -7,7 +7,7 @@ members = [
     "gatekeeper",
     "shared"
 , "spatialserver"
-, "game_sockets"]
+, "game_sockets", "fakebroker"]
 
 [profile.release]
 opt-level = 3
