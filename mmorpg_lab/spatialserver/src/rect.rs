@@ -5,6 +5,7 @@ pub struct Vec2 {
     pub y: f32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)] 
 pub struct Rect {
     pub x: f32,
     pub y: f32,
