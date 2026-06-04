@@ -1,6 +1,7 @@
 mod listener;
+mod quic_listener;
 mod spawner;
-use shared::{DEFAULT_REDIS_IP};
+use shared::DEFAULT_REDIS_IP;
 
 use tracing::{Level, error, info};
 use tracing_subscriber::FmtSubscriber;
@@ -32,7 +33,14 @@ async fn main() {
         listener::heartbeat_listener(listener_redis).await;
     });
 
+    let (spawn_tx, spawn_rx) = tokio::sync::mpsc::unbounded_channel::<u32>();
+
+    tokio::task::spawn_blocking(move || {
+        let mut quic_server =
+            quic_listener::QuicOrchestrator::new(&"127.0.0.1".to_string(), 10002, spawn_tx);
+        quic_server.run();
+    });
     //Start the server scaling manager
     let spawner_redis = redis_conn.clone();
-    spawner::maintain_hot_servers(spawner_redis).await;
+    spawner::maintain_hot_servers(spawner_redis, spawn_rx).await;
 }

@@ -36,18 +36,18 @@ impl SpatialService {
         let broker_peer = GamePeer::new(QuicBackend::new());
         if let Err(e) = broker_peer.connect(broker_addr, *broker_port) {
             error!(
-                "[SPATIAL SERVICE] ERROR: Failed to connect to broker on address {}:{}: {:?}",
+                " ERROR: Failed to connect to broker on address {}:{}: {:?}",
                 broker_addr, broker_port, e
             );
         }
 
-        // let orchestrator_peer = GamePeer::new(QuicBackend::new());
-        // if let Err(e) = orchestrator_peer.connect(orchestrator_addr, *orchestrator_port) {
-        //     error!(
-        //         "[SPATIAL SERVICE] ERROR: Failed to connect to orchestrator on address {}:{}: {:?}",
-        //         orchestrator_addr, orchestrator_port, e
-        //     );
-        // }
+        let orchestrator_peer = GamePeer::new(QuicBackend::new());
+        if let Err(e) = orchestrator_peer.connect(orchestrator_addr, *orchestrator_port) {
+            error!(
+                " ERROR: Failed to connect to orchestrator on address {}:{}: {:?}",
+                orchestrator_addr, orchestrator_port, e
+            );
+        }
 
         let quic_broker = Some(QuicConnection {
             peer: broker_peer,
@@ -56,29 +56,29 @@ impl SpatialService {
             unreliable_stream: None,
         });
 
-        // let quic_orchestrator = Some(QuicConnection {
-        //     peer: orchestrator_peer,
-        //     connection: None,
-        //     reliable_stream: None,
-        //     unreliable_stream: None,
-        // });
+        let quic_orchestrator = Some(QuicConnection {
+            peer: orchestrator_peer,
+            connection: None,
+            reliable_stream: None,
+            unreliable_stream: None,
+        });
 
         Self {
             quad_tree: QuadTree::new(
                 Rect {
-                    x: 0.0,
-                    y: 0.0,
+                    x: -500.0,
+                    y: -500.0,
                     width: 1000.0,
                     height: 1000.0,
                 },
                 0,
                 4,
-                3,
+                2,
                 1,
             ),
             client_shards: HashMap::new(),
             quic_broker: quic_broker,
-            quic_orchestrator: None,
+            quic_orchestrator: quic_orchestrator,
         }
     }
 
@@ -89,10 +89,7 @@ impl SpatialService {
             while let Ok(Some(event)) = quic_broker.peer.poll() {
                 match event {
                     GameNetworkEvent::Connected(connection) => {
-                        info!(
-                            "[SPATIAL SERVICE] Connected to broker : {:?}",
-                            connection.connection_id
-                        );
+                        info!(" Connected to broker : {:?}", connection.connection_id);
                         quic_broker.connection = Some(connection);
                         if let Ok(_) = quic_broker
                             .peer
@@ -116,7 +113,7 @@ impl SpatialService {
                     }
                     GameNetworkEvent::StreamCreated(connection, stream) => {
                         info!(
-                            "[SPATIAL SERVICE] Stream created for broker {:?}, reliable: {}",
+                            " Stream created for broker {:?}, reliable: {}",
                             connection.connection_id,
                             stream.is_reliable()
                         );
@@ -127,7 +124,7 @@ impl SpatialService {
                     }
                     GameNetworkEvent::StreamClosed(connection, stream) => {
                         info!(
-                            "[SPATIAL SERVICE] Stream closed for broker {:?}, reliable: {}",
+                            " Stream closed for broker {:?}, reliable: {}",
                             connection.connection_id,
                             stream.is_reliable()
                         );
@@ -137,18 +134,13 @@ impl SpatialService {
                         }
                     }
                     GameNetworkEvent::Disconnected(game_connection) => {
-                        info!(
-                            "[SPATIAL SERVICE] Broker disconnected: {:?}",
-                            game_connection.connection_id
-                        );
+                        info!(" Broker disconnected: {:?}", game_connection.connection_id);
                         // SHOULD NOT BE POSSIBLE SINCE
                         if Some(game_connection) == quic_broker.connection {
                             quic_broker.connection = None;
                             quic_broker.reliable_stream = None;
                             quic_broker.unreliable_stream = None;
-                            error!(
-                                "[SPATIAL SERVICE] Disconnected from broker, shutting down service."
-                            );
+                            error!(" Disconnected from broker, shutting down service.");
                             return;
                         }
                     }
@@ -158,7 +150,7 @@ impl SpatialService {
                         data,
                     } => {
                         info!(
-                            "[SPATIAL SERVICE] Message received from broker {:?} on stream {:?}: {} bytes",
+                            " Message received from broker {:?} on stream {:?}: {} bytes",
                             connection.connection_id,
                             stream,
                             data.len()
@@ -167,7 +159,7 @@ impl SpatialService {
                     }
                     GameNetworkEvent::Error { connection, inner } => {
                         warn!(
-                            "[SPATIAL SERVICE] Error on connection {:?}: {:?}",
+                            " Error on connection {:?}: {:?}",
                             connection.connection_id, inner
                         );
                     }
@@ -186,10 +178,7 @@ impl SpatialService {
             while let Ok(Some(event)) = quic_orchestrator.peer.poll() {
                 match event {
                     GameNetworkEvent::Connected(connection) => {
-                        info!(
-                            "[SPATIAL SERVICE] Orchestrator connected : {:?}",
-                            connection.connection_id
-                        );
+                        info!(" Orchestrator connected : {:?}", connection.connection_id);
                         quic_orchestrator.connection = Some(connection);
                         let _ = quic_orchestrator
                             .peer
@@ -200,7 +189,7 @@ impl SpatialService {
                     }
                     GameNetworkEvent::StreamCreated(connection, stream) => {
                         info!(
-                            "[SPATIAL SERVICE] Stream created for orchestrator {:?}, reliable: {}, stream_id: {}",
+                            " Stream created for orchestrator {:?}, reliable: {}, stream_id: {}",
                             connection.connection_id,
                             stream.is_reliable(),
                             stream.stream_id
@@ -212,7 +201,7 @@ impl SpatialService {
                     }
                     GameNetworkEvent::StreamClosed(connection, stream) => {
                         info!(
-                            "[SPATIAL SERVICE] Stream closed for orchestrator {:?}, reliable: {}",
+                            " Stream closed for orchestrator {:?}, reliable: {}",
                             connection.connection_id,
                             stream.is_reliable()
                         );
@@ -223,7 +212,7 @@ impl SpatialService {
                     }
                     GameNetworkEvent::Disconnected(game_connection) => {
                         info!(
-                            "[SPATIAL SERVICE] Orchestrator disconnected: {:?}",
+                            " Orchestrator disconnected: {:?}",
                             game_connection.connection_id
                         );
                         // SHOULD NOT BE POSSIBLE SINCE
@@ -231,9 +220,7 @@ impl SpatialService {
                             quic_orchestrator.connection = None;
                             quic_orchestrator.reliable_stream = None;
                             quic_orchestrator.unreliable_stream = None;
-                            error!(
-                                "[SPATIAL SERVICE] Disconnected from orchestrator, shutting down service."
-                            );
+                            error!(" Disconnected from orchestrator, shutting down service.");
                             return;
                         }
                     }
@@ -243,7 +230,7 @@ impl SpatialService {
                         data,
                     } => {
                         info!(
-                            "[SPATIAL SERVICE] Message received from orchestrator {:?} on stream {:?}: {} bytes",
+                            " Message received from orchestrator {:?} on stream {:?}: {} bytes",
                             connection.connection_id,
                             stream,
                             data.len()
@@ -252,7 +239,7 @@ impl SpatialService {
                     }
                     GameNetworkEvent::Error { connection, inner } => {
                         warn!(
-                            "[SPATIAL SERVICE] Error on connection {:?}: {:?}",
+                            " Error on connection {:?}: {:?}",
                             connection.connection_id, inner
                         );
                     }
@@ -303,6 +290,7 @@ impl SpatialService {
                         shard_id, new_shard_id
                     );
                     self.handle_orchestrator_shard_ready(new_shard_id);
+                    self.quad_tree.print_state();
                 }
                 _ => {
                     warn!(
@@ -317,7 +305,8 @@ impl SpatialService {
     pub fn run(&mut self) {
         loop {
             self.poll_broker_events();
-            // self.poll_orchestrator_events();
+            self.poll_orchestrator_events();
+            // self.quad_tree.print_state();
         }
     }
 
@@ -348,6 +337,10 @@ impl SpatialService {
 
     fn request_orchestrator_split(&self, split_data: SplitData) {
         // Gather new child shard IDs from the split data
+        info!(
+            "Requesting orchestrator split: parent shard {}, new shards {:?}",
+            split_data.parent_shard_id, split_data.new_shards_ids
+        );
         let msg = OrchestratorMessage::RequestSplit {
             shard_id: split_data.parent_shard_id,
             new_shards_ids: split_data.new_shards_ids,
@@ -359,7 +352,7 @@ impl SpatialService {
                     if let Some(stream) = &quic_orchestrator.reliable_stream {
                         if let Err(e) = peer.send(connection, stream, Bytes::from(msg.to_bytes())) {
                             error!(
-                                "[SPATIAL SERVICE] Failed to send split request to orchestrator for shard {}: {:?}",
+                                " Failed to send split request to orchestrator for shard {}: {:?}",
                                 split_data.parent_shard_id, e
                             );
                         }
@@ -407,9 +400,13 @@ impl SpatialService {
     fn send_unsubscribe(&self, client_id: u32, shard_id: u32) {
         let topic = format!("shard:{}", shard_id);
         info!(client_id, topic, "Unsubscribe");
+        let mut topic_bytes = [0u8; 32];
+        let bytes = topic.as_bytes();
+        let len = bytes.len().min(topic_bytes.len());
+        topic_bytes[..len].copy_from_slice(&bytes[..len]);
         let msg = BrokerMessage::Unsubscribe {
             client_id,
-            topic: topic.as_bytes().try_into().unwrap(),
+            topic: topic_bytes,
         };
 
         if let Some(broker) = &self.quic_broker {
@@ -418,7 +415,7 @@ impl SpatialService {
                     if let Some(stream) = &broker.reliable_stream {
                         if let Err(e) = peer.send(connection, stream, Bytes::from(msg.to_bytes())) {
                             error!(
-                                "[SPATIAL SERVICE] Failed to send unsubscribe message for client {}: {:?}",
+                                " Failed to send unsubscribe message for client {}: {:?}",
                                 client_id, e
                             );
                         }
@@ -447,7 +444,7 @@ impl SpatialService {
                     if let Some(stream) = &broker.reliable_stream {
                         if let Err(e) = peer.send(connection, stream, Bytes::from(msg.to_bytes())) {
                             error!(
-                                "[SPATIAL SERVICE] Failed to send subscribe message for client {}: {:?}",
+                                " Failed to send subscribe message for client {}: {:?}",
                                 client_id, e
                             );
                         }

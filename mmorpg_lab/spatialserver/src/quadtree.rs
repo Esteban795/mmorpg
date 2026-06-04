@@ -115,26 +115,25 @@ impl QuadTree {
             return None;
         }
 
-        // On correct leaf
-        self.players.push((client_id, pos));
-        let current_shard = self.shard_id.unwrap();
-
-        let network_shard = match self.status {
-            ShardStatus::Active => current_shard,
-            ShardStatus::Pending { fallback_shard_id } => fallback_shard_id,
-        };
-
-        if self.players.len() > self.max_players_per_shard
+        if self.players.len() >= self.max_players_per_shard
             && self.depth < self.max_depth
             && self.status == ShardStatus::Active
         {
             let split_data = self.split_logically();
+
             if let Some(mut recursive_result) = self.insert_player(client_id, pos) {
-                // Tell orchestrator to trigger split and fallback until confirmation
                 recursive_result.trigger_orchestrator = Some(split_data);
                 return Some(recursive_result);
             }
         }
+
+        self.players.push((client_id, pos));
+
+        let current_shard = self.shard_id.unwrap();
+        let network_shard = match self.status {
+            ShardStatus::Active => current_shard,
+            ShardStatus::Pending { fallback_shard_id } => fallback_shard_id,
+        };
 
         Some(InsertResult {
             logical_shard_id: current_shard,
@@ -263,5 +262,68 @@ impl QuadTree {
         }
 
         None
+    }
+
+    pub fn print_state(&self) {
+        println!("\n=== ÉTAT DU QUADTREE (Depth 0/{}) ===", self.max_depth);
+        self.print_recursive(0);
+        println!("=====================================\n");
+    }
+
+    /// Fonction utilitaire récursive pour l'affichage
+    fn print_recursive(&self, indent_level: usize) {
+        // Création de l'indentation visuelle (2 espaces par niveau de profondeur)
+        let indent = "  ".repeat(indent_level);
+        let prefix = if indent_level > 0 { "└─ " } else { "" };
+
+        // Formatage lisible de la zone géographique
+        let bounds_str = format!(
+            "[x:{:.0}, y:{:.0}, w:{:.0}, h:{:.0}]",
+            self.bounds.x, self.bounds.y, self.bounds.width, self.bounds.height
+        );
+
+        if let Some(children) = &self.children {
+            // C'est un nœud parent (il n'a plus de shard_id ni de joueurs)
+            println!(
+                "{}{}📁 Parent Node {} - Depth: {}",
+                indent, prefix, bounds_str, self.depth
+            );
+
+            // On descend récursivement dans les 4 enfants
+            for child in children.iter() {
+                child.print_recursive(indent_level + 1);
+            }
+        } else {
+            // C'est une feuille (un vrai serveur/shard en activité ou en attente)
+            let shard_str = match self.shard_id {
+                Some(id) => format!("Shard {}", id),
+                None => "ERREUR_NO_SHARD".to_string(), // Ne devrait jamais arriver sur une feuille
+            };
+
+            let status_str = match self.status {
+                ShardStatus::Active => "🟢 Active".to_string(),
+                ShardStatus::Pending { fallback_shard_id } => {
+                    format!(
+                        "🟡 Pending (Réseau pointe vers Shard {})",
+                        fallback_shard_id
+                    )
+                }
+            };
+
+            // Extraction des IDs des joueurs pour un affichage propre
+            let player_ids: Vec<u32> = self.players.iter().map(|p| p.0).collect();
+
+            println!(
+                "{}{}📄 {} {} | {} | Joueurs ({}/{}): {:?}",
+                indent,
+                prefix,
+                shard_str,
+                bounds_str,
+                status_str,
+                self.players.len(),
+                self.max_players_per_shard,
+                player_ids
+            );
+        }
     }
 }

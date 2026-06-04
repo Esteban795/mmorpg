@@ -18,7 +18,7 @@ fn main() {
     info!("Starting MMORPG spatial server...");
 
     let addr = "127.0.0.1".into();
-    let mut spatial_service = SpatialService::new(&addr, &10000,&addr, &50052);
+    let mut spatial_service = SpatialService::new(&addr, &10000, &addr, &10002);
 
     spatial_service.run();
 }

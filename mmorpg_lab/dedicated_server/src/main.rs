@@ -8,7 +8,6 @@ use std::net::{SocketAddr, UdpSocket};
 use std::time::Duration;
 use tracing::{Level, error, info};
 use tracing_subscriber::FmtSubscriber;
-use uuid::Uuid;
 
 use heartbeat::{HeartbeatPlugin, HeartbeatSocket};
 use network::{NetworkManager, NetworkPlugin};
@@ -16,11 +15,14 @@ use network::{NetworkManager, NetworkPlugin};
 const DEFAULT_DS_PORT: &str = "8001";
 const DEFAULT_ORCH_PORT: &str = "8000";
 const DEFAULT_ZONE: &str = "zone_A";
-const DEFAULT_MAX_PLAYERS: &str = "100";
+const DEFAULT_MAX_PLAYERS: &str = "2";
+const DEFAULT_SHARD_ID: u32 = 0;
+
+use crate::heartbeat::ShardId;
 
 #[derive(Resource)]
 pub struct ServerConfig {
-    pub id: String,
+    pub id: u32,
     pub ip: String,
     pub port: u16,
     pub zone: String,
@@ -66,8 +68,13 @@ fn main() {
 
     info!("Max players: {}", max_players);
 
+    let shard_id = std::env::var("DS_SHARD_ID")
+        .unwrap_or_else(|_| DEFAULT_SHARD_ID.to_string())
+        .parse()
+        .expect("Invalid SHARD_ID");
+
     let config = ServerConfig {
-        id: Uuid::new_v4().to_string(),
+        id: shard_id,
         ip: "127.0.0.1".to_string(), // Only local IP for this lab - might need to be changed for a env variable in a real deployment
         port,
         zone,
@@ -106,5 +113,6 @@ fn main() {
         .insert_resource(config)
         .insert_resource(HeartbeatSocket(socket))
         .insert_resource(NetworkManager { peer })
+        .insert_resource(ShardId(shard_id))
         .run();
 }

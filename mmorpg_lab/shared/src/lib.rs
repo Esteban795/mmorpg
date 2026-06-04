@@ -48,6 +48,7 @@ impl fmt::Display for ServerMessage {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ServerInfo {
+    pub id: u32,
     pub ip: String,
     pub port: u16,
     pub zone: String,
