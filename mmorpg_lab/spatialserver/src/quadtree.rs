@@ -1,7 +1,6 @@
 use crate::rect::{Rect, Vec2};
 use std::sync::atomic::{AtomicU32, Ordering};
 
-// Générateur d'ID unique global pour les nouveaux Shards
 static NEXT_SHARD_ID: AtomicU32 = AtomicU32::new(1);
 
 #[derive(Debug, Clone, PartialEq)]
@@ -164,6 +163,8 @@ impl QuadTree {
         let sub_h = self.bounds.height / 2.0;
         let next_depth = self.depth + 1;
 
+
+        // Should we use that or generate UUIDs ? I'd go for UUIDs, but since the TP wants u32 ???
         let id_nw = NEXT_SHARD_ID.fetch_add(1, Ordering::Relaxed);
         let id_ne = NEXT_SHARD_ID.fetch_add(1, Ordering::Relaxed);
         let id_sw = NEXT_SHARD_ID.fetch_add(1, Ordering::Relaxed);

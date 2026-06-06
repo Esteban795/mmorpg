@@ -225,6 +225,13 @@ fn main() {
                                     client_id, topic_str
                                 );
                             }
+                            BrokerMessage::Unsubscribe { client_id, topic } => {
+                                let topic_str = topic_to_string(&topic);
+                                info!(
+                                    "Received Unsubscribe from client {}: topic={}",
+                                    client_id, topic_str
+                                );
+                            }
                             _ => {
                                 warn!(
                                     "Received unsupported message type from client: {:?}",

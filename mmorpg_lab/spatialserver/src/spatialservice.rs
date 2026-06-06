@@ -215,7 +215,7 @@ impl SpatialService {
                             " Orchestrator disconnected: {:?}",
                             game_connection.connection_id
                         );
-                        // SHOULD NOT BE POSSIBLE SINCE
+                        // SHOULD NEVER HAPPEN SINCE DISCONNECTING MEANS SHUTTING DOWN THE SERVICE
                         if Some(game_connection) == quic_orchestrator.connection {
                             quic_orchestrator.connection = None;
                             quic_orchestrator.reliable_stream = None;
@@ -316,6 +316,8 @@ impl SpatialService {
         self.quad_tree.remove_player(client_id);
 
         if let Some(result) = self.quad_tree.insert_player(client_id, pos) {
+            // Check if we moved shards and need to update broker subscriptions
+            // if insertion required a split, it will NOT send anything on the network before orchestrator tells us the new shard is ready
             if old_network_shard != Some(result.network_shard_id) {
                 if let Some(old) = old_network_shard {
                     self.send_unsubscribe(client_id, old);
@@ -364,33 +366,28 @@ impl SpatialService {
 
     pub fn handle_orchestrator_shard_ready(&mut self, ready_child_shard_id: u32) {
         info!(
-            "QUIC : L'Orchestrateur confirme que le sous-serveur {} est en ligne. Validation...",
+            "Orchestrator confirmed shard {} is ready, activating it and migrating affected players if necessary",
             ready_child_shard_id
         );
 
-        // On tente d'activer cet enfant spécifique
         if let Some((parent_shard_id, updates)) =
             self.quad_tree.commit_child_split(ready_child_shard_id)
         {
-            // Mass Handoff PARTIEL : On ne bouge QUE les joueurs de ce quadrant !
+            // Partial mass handoff : only move players that are in this shard, old shard is still active and can serve players that are not in the new shard
             for (affected_client, new_network_shard) in updates {
-                // On les désabonne du vieux parent surchargé
                 self.send_unsubscribe(affected_client, parent_shard_id);
-
-                // On les abonne à leur tout nouveau serveur tout neuf
                 self.send_subscribe(affected_client, new_network_shard);
-
                 self.client_shards
                     .insert(affected_client, new_network_shard);
 
                 info!(
-                    "Joueur {} transféré avec succès du parent {} vers l'enfant {}",
+                    "Player {} successfully transferred from parent {} to child {}",
                     affected_client, parent_shard_id, new_network_shard
                 );
             }
         } else {
             warn!(
-                "L'orchestrateur a signalé le shard {} comme prêt, mais il est introuvable ou déjà actif.",
+                "Orchestrator confirmed shard {} is ready, but it is not found or already active.",
                 ready_child_shard_id
             );
         }
