@@ -31,8 +31,8 @@ fn main() {
 
     let backend = QuicBackend::new();
     let mut peer = GamePeer::new(backend);
-    if let Err(e) = peer.listen("127.0.0.1", 10000) {
-        error!("CRITICAL: Failed to listen on port {}: {:?}", 10000, e);
+    if let Err(e) = peer.listen("127.0.0.1", 10001) {
+        error!("CRITICAL: Failed to listen on port {}: {:?}", 10001, e);
         return;
     }
 
