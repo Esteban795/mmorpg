@@ -2,18 +2,22 @@ use redis::{AsyncCommands, aio::MultiplexedConnection};
 use shared::ServerInfo;
 use std::net::UdpSocket;
 use std::time::Instant;
+use tokio::sync::mpsc;
 use tokio::time::{Duration, interval};
 use tracing::{error, info};
 
 //Settings for the spawner. Adjust as needed for testing or production.
-const HOT_SERVERS_MIN: usize = 3;
-const MAX_PLAYERS_PER_SERVER: u16 = 3;
+const HOT_SERVERS_MIN: usize = 1;
+const MAX_PLAYERS_PER_SERVER: u16 = 2;
 const STARTING_PORT: u16 = 8001;
 const MAX_PORT: u16 = 9000;
 const TICKING_INTERVAL_SECS: u64 = 5;
 const BOOT_TIMEOUT_SECS: u64 = 20;
 
-pub async fn maintain_hot_servers(mut redis_conn: MultiplexedConnection) {
+pub async fn maintain_hot_servers(
+    mut redis_conn: MultiplexedConnection,
+    mut spawn_rx: mpsc::UnboundedReceiver<u32>, // Receives shard IDs for new servers to spawn on demand
+) {
     println!(
         "Scaler started. Minimum available servers required: {}",
         HOT_SERVERS_MIN
@@ -25,37 +29,33 @@ pub async fn maintain_hot_servers(mut redis_conn: MultiplexedConnection) {
     let boot_timeout = Duration::from_secs(BOOT_TIMEOUT_SECS);
 
     loop {
-        //We get all the servers from Redis and count how many are available (currently just "not full" but later we can use cpu usage healthiness too).
-        //If we have less than HOT_SERVERS_MIN, we spawn new servers until we reach the minimum.
-        ticker.tick().await;
+        tokio::select! {
+            // Ehhhh i don't know if it should still work or not ??? Are we supposed to keep backup servers in case a game server
+            // crashes so we can switch it up instantly ? could work
+            // But this also breaks up because of the IDs ? so idk
+            _ = ticker.tick() => {
+                let now = Instant::now();
+                pending_spawns.retain(|&spawn_time| now.duration_since(spawn_time) < boot_timeout);
 
-        // Clear out pending spawns that took too long (they probably crashed on boot)
-        let now = Instant::now();
-        pending_spawns.retain(|&spawn_time| now.duration_since(spawn_time) < boot_timeout);
+                let available_count = count_available_servers(&mut redis_conn).await;
+                let projected_count = available_count + pending_spawns.len();
 
-        let available_count = count_available_servers(&mut redis_conn).await;
-        let projected_count = available_count + pending_spawns.len();
+                if projected_count < HOT_SERVERS_MIN {
+                    let servers_to_spawn = HOT_SERVERS_MIN - projected_count;
+                    for _ in 0..servers_to_spawn {
+                        let free_port = find_free_port(&mut port_cursor);
 
-        info!(
-            "Cluster Status: {} available, {} booting. Target: {}.",
-            available_count,
-            pending_spawns.len(),
-            HOT_SERVERS_MIN
-        );
 
-        if projected_count < HOT_SERVERS_MIN {
-            let servers_to_spawn = HOT_SERVERS_MIN - projected_count;
-            info!("Need {} more servers. Spawning...", servers_to_spawn);
+                        spawn_dedicated_server(free_port, "Canada", MAX_PLAYERS_PER_SERVER, 0).await;
+                        pending_spawns.push(now);
+                    }
+                }
+            }
 
-            for _ in 0..servers_to_spawn {
-                // Find the next genuinely free port
+            Some(new_shard_id) = spawn_rx.recv() => {
+                info!("Split request received : launching new shard with id {}", new_shard_id);
                 let free_port = find_free_port(&mut port_cursor);
-
-                // Spawn the server with the guaranteed free port
-                spawn_dedicated_server(free_port, "Canada", MAX_PLAYERS_PER_SERVER).await;
-
-                // Track this spawn so we don't spawn it again on the next tick
-                pending_spawns.push(now);
+                spawn_dedicated_server(free_port, "Canada", MAX_PLAYERS_PER_SERVER, new_shard_id).await;
             }
         }
     }
@@ -119,7 +119,7 @@ fn find_free_port(cursor: &mut u16) -> u16 {
     }
 }
 
-async fn spawn_dedicated_server(port: u16, zone: &str, max_players: u16) {
+async fn spawn_dedicated_server(port: u16, zone: &str, max_players: u16, shard_id: u32) {
     info!("Booting Bevy server on port {} in zone {}", port, zone);
 
     let profile = if cfg!(debug_assertions) {
@@ -128,7 +128,10 @@ async fn spawn_dedicated_server(port: u16, zone: &str, max_players: u16) {
         "release"
     };
 
-    info!("Using profile '{}' for dedicated server executable.", profile);
+    info!(
+        "Using profile '{}' for dedicated server executable.",
+        profile
+    );
 
     let default_path = format!(
         "./target/{}/dedicated_server{}",
@@ -142,6 +145,7 @@ async fn spawn_dedicated_server(port: u16, zone: &str, max_players: u16) {
         .env("DS_PORT", port.to_string())
         .env("DS_ZONE", zone)
         .env("DS_MAX_PLAYERS", max_players.to_string())
+        .env("DS_SHARD_ID", shard_id.to_string())
         .spawn()
     {
         Ok(_) => info!("Dedicated server started successfully."),
