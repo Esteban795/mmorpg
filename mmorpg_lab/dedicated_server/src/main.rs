@@ -12,7 +12,7 @@ use tracing_subscriber::FmtSubscriber;
 use heartbeat::{HeartbeatPlugin, HeartbeatSocket};
 use network::{NetworkManager, NetworkPlugin};
 use shared::{DEFAULT_BROKER_IP, DEFAULT_BROKER_PORT};
-use shared::{DEFAULT_ORCH_IP, DEFAULT_ORCH_PORT};
+use shared::{DEFAULT_ORCHESTRATOR_ADDR, DEFAULT_ORCHESTRATOR_PORT};
 
 const DEFAULT_DS_PORT: &str = "8001";
 const DEFAULT_ZONE: &str = "shard:0";
@@ -52,7 +52,12 @@ fn main() {
     info!("Starting dedicated server on port {}...", port);
 
     let orchestrator_addr: SocketAddr = std::env::var("ORCH_ADDR")
-        .unwrap_or_else(|_| format!("{}:{}", DEFAULT_ORCH_IP, DEFAULT_ORCH_PORT))
+        .unwrap_or_else(|_| {
+            format!(
+                "{}:{}",
+                DEFAULT_ORCHESTRATOR_ADDR, DEFAULT_ORCHESTRATOR_PORT
+            )
+        })
         .parse()
         .expect("Invalid ORCH_ADDR");
 

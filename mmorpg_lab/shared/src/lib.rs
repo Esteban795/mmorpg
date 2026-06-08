@@ -7,8 +7,6 @@ use std::fmt;
 use tracing::error;
 
 pub const DEFAULT_REDIS_IP: &str = "redis://127.0.0.1";
-pub const DEFAULT_BROKER_IP: &str = "127.0.0.1";
-pub const DEFAULT_BROKER_PORT: u16 = 9000;
 pub const DEFAULT_GATEKEEPER_ADDR_PORT: &str = "127.0.0.1:8080";
 pub const DEFAULT_BROKER_IP: &str = "127.0.0.1";
 pub const DEFAULT_BROKER_PORT: u16 = 10001;
