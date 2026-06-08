@@ -27,8 +27,8 @@ pub async fn heartbeat_listener(mut redis_conn: MultiplexedConnection) {
         if let Ok((len, addr)) = socket.recv_from(&mut buf).await {
             match serde_json::from_slice::<ServerInfo>(&buf[..len]) {
                 Ok(info) => {
-                    let generated_id = format!("{}:{}", info.ip, info.port);
-                    let redis_key = format!("server:{}", generated_id);
+                    let id = info.id;
+                    let redis_key = format!("server:{}", id);
 
                     if let Ok(json_string) = serde_json::to_string(&info) {
                         let _: Result<(), _> =

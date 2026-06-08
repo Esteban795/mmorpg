@@ -258,6 +258,7 @@ mod tests {
     //     let _: () = cmd_conn.del(redis_key).await.unwrap();
 
     //     let fake_server = shared::ServerInfo {
+    //        id: 1, // does not matter for a test
     //         ip: "15.23.42.11".to_string(),
     //         port: 9001,
     //         zone: "eu-west".to_string(),

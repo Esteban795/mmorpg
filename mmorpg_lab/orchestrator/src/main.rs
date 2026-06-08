@@ -1,6 +1,7 @@
 mod listener;
+mod quic_listener;
 mod spawner;
-use shared::{DEFAULT_REDIS_IP};
+use shared::{DEFAULT_ORCHESTRATOR_ADDR, DEFAULT_ORCHESTRATOR_PORT, DEFAULT_REDIS_IP};
 
 use tracing::{Level, error, info};
 use tracing_subscriber::FmtSubscriber;
@@ -32,7 +33,25 @@ async fn main() {
         listener::heartbeat_listener(listener_redis).await;
     });
 
+    let (spawn_tx, spawn_rx) = tokio::sync::mpsc::unbounded_channel::<u32>();
+
+    let orchestrator_addr: String = std::env::var("ORCHESTRATOR_ADDR")
+        .unwrap_or_else(|_| DEFAULT_ORCHESTRATOR_ADDR.to_string())
+        .parse()
+        .expect("Invalid ORCHESTRATOR_ADDR");
+
+    let orchestrator_port: u16 = std::env::var("ORCHESTRATOR_PORT")
+        .unwrap_or_else(|_| DEFAULT_ORCHESTRATOR_PORT.to_string())
+        .parse()
+        .expect("Invalid ORCHESTRATOR_PORT");
+
+    tokio::task::spawn_blocking(move || {
+        let mut quic_server =
+            quic_listener::QuicOrchestrator::new(&orchestrator_addr, orchestrator_port, spawn_tx);
+        quic_server.run();
+    });
+    
     //Start the server scaling manager
     let spawner_redis = redis_conn.clone();
-    spawner::maintain_hot_servers(spawner_redis).await;
+    spawner::maintain_hot_servers(spawner_redis, spawn_rx).await;
 }

@@ -10,6 +10,9 @@ use crate::network::PlayerRegistry;
 pub struct HeartbeatSocket(pub UdpSocket);
 
 #[derive(Resource)]
+pub struct ShardId(pub u32);
+
+#[derive(Resource)]
 pub struct HeartbeatTimer(pub Timer);
 
 pub struct HeartbeatPlugin;
@@ -30,6 +33,7 @@ fn send_heartbeat(
     config: Res<ServerConfig>,
     registry: Res<PlayerRegistry>,
     socket: Res<HeartbeatSocket>,
+    shard_id: Res<ShardId>,
 ) {
     // Execute every 5 seconds while being called at 20Hz
     if timer.0.tick(time.delta()).just_finished() {
@@ -44,6 +48,7 @@ fn send_heartbeat(
         };
 
         let hb = ServerInfo {
+            id: shard_id.0,
             ip: config.ip.clone(),
             port: config.port,
             zone: config.zone.clone(),
@@ -56,8 +61,8 @@ fn send_heartbeat(
             mem_usage: 0,
         };
         info!(
-            "Heartbeat info: IP={}, Port={}, Zone={}, Players={}/{}",
-            hb.ip, hb.port, hb.zone, hb.num_players, hb.capacity
+            "Heartbeat info: id : {}, IP={}, Port={}, Zone={}, Players={}/{}",
+            hb.id, hb.ip, hb.port, hb.zone, hb.num_players, hb.capacity
         );
 
         match serde_json::to_string(&hb) {
