@@ -9,6 +9,7 @@ use game_sockets::{GameNetworkEvent, GamePeer, protocols::QuicBackend};
 use shared::broker_protocol::BrokerMessage;
 use shared::orchestrator_protocol::OrchestratorMessage;
 
+const MARGIN: f32 = 50.0;
 pub struct QuicConnection {
     pub peer: GamePeer,
     pub connection: Option<game_sockets::GameConnection>,
@@ -23,6 +24,7 @@ pub struct SpatialService {
     // QUIC connections to the broker & orchestrator
     pub quic_broker: Option<QuicConnection>,
     pub quic_orchestrator: Option<QuicConnection>,
+    client_crossing_state: HashMap<u32, Vec<u32>>,
 }
 
 impl SpatialService {
@@ -74,11 +76,12 @@ impl SpatialService {
                 0,
                 4,
                 2,
-                1,
+                0,
             ),
             client_shards: HashMap::new(),
             quic_broker: quic_broker,
             quic_orchestrator: quic_orchestrator,
+            client_crossing_state: HashMap::new(),
         }
     }
 
@@ -334,6 +337,30 @@ impl SpatialService {
                 );
                 self.request_orchestrator_split(split_data);
             }
+
+
+
+            // Crossing alert check : 
+            // if the player is near the border of its shard, we check if there are nearby shards and send an alert to the broker
+            let mut shards_near = self.quad_tree.shards_near(&pos, MARGIN);
+            shards_near.retain(|&id| id != result.network_shard_id);
+
+            let old_nearby = self
+                .client_crossing_state
+                .get(&client_id)
+                .cloned()
+                .unwrap_or_default();
+
+            if shards_near != old_nearby {
+                if !shards_near.is_empty() {
+                    self.emit_crossing_alert(
+                        client_id,
+                        result.network_shard_id,
+                        shards_near.clone(),
+                    );
+                }
+                self.client_crossing_state.insert(client_id, shards_near);
+            }
         }
     }
 
@@ -451,15 +478,33 @@ impl SpatialService {
         }
     }
 
-    // fn emit_crossing_alert(
-    //     &self,
-    //     connection: &game_sockets::GameConnection,
-    //     client_id: u32,
-    //     nearby_shards: Vec<u32>,
-    // ) {
-    //     info!(client_id, ?nearby_shards, "CrossingAlert émis");
-    //     // TODO: Call broker
-    //     // FOR ALL  nearby_shards
-    //     //     envoyer au broker de subscribe cette shard au topic client:<client_id>
-    // }
+    fn emit_crossing_alert(&self, client_id: u32, owner_shard_id: u32, nearby_shards: Vec<u32>) {
+        info!(client_id, ?nearby_shards, "CrossingAlert");
+
+        // We can have at most 3 nearby shards in a 2D quad tree, so we can fit them all in the message without worrying about size limits
+        let mut shards_involved = [0u32; 3];
+        for (i, shard_id) in nearby_shards.iter().take(3).enumerate() {
+            shards_involved[i] = *shard_id;
+        }
+        let msg = BrokerMessage::CrossingAlert {
+            client_id,
+            owner_shard_id,
+            shards_involved,
+        };
+
+        if let Some(broker) = &self.quic_broker {
+            if let Some(peer) = Some(&broker.peer) {
+                if let Some(connection) = &broker.connection {
+                    if let Some(stream) = &broker.reliable_stream {
+                        if let Err(e) = peer.send(connection, stream, Bytes::from(msg.to_bytes())) {
+                            error!(
+                                " Failed to send crossing alert message for client {}: {:?}",
+                                client_id, e
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

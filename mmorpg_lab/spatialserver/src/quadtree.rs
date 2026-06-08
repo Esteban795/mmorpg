@@ -151,7 +151,12 @@ impl QuadTree {
                 child.collect_shards_near(search_area, results);
             }
         } else if let Some(shard_id) = self.shard_id {
-            results.push(shard_id);
+            // Return shard_id to use for network routing (can be fallback if pending)
+            let network_shard = match self.status {
+                ShardStatus::Active => shard_id,
+                ShardStatus::Pending { fallback_shard_id } => fallback_shard_id,
+            };
+            results.push(network_shard);
         }
     }
 
@@ -162,7 +167,6 @@ impl QuadTree {
         let sub_w = self.bounds.width / 2.0;
         let sub_h = self.bounds.height / 2.0;
         let next_depth = self.depth + 1;
-
 
         // Should we use that or generate UUIDs ? I'd go for UUIDs, but since the TP wants u32 ???
         let id_nw = NEXT_SHARD_ID.fetch_add(1, Ordering::Relaxed);
