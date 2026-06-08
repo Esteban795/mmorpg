@@ -9,6 +9,8 @@ pub const DEFAULT_REDIS_IP: &str = "redis://127.0.0.1";
 pub const DEFAULT_BROKER_IP: &str = "127.0.0.1";
 pub const DEFAULT_BROKER_PORT: u16 = 9000;
 pub const DEFAULT_GATEKEEPER_ADDR_PORT: &str = "127.0.0.1:8080";
+pub const DEFAULT_ORCH_IP: &str = "127.0.0.1";
+pub const DEFAULT_ORCH_PORT: &str = "8000";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ClientMessage {
@@ -24,7 +26,7 @@ impl fmt::Display for ClientMessage {
             ClientMessage::Join { username } => {
                 let name = String::from_utf8_lossy(username);
                 write!(f, "Join {{ username: {} }}", name)
-            },
+            }
             ClientMessage::MoveInput { x, y } => write!(f, "MoveInput {{ x: {}, y: {} }}", x, y),
         }
     }

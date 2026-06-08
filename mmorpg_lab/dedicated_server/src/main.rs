@@ -12,10 +12,10 @@ use uuid::Uuid;
 
 use heartbeat::{HeartbeatPlugin, HeartbeatSocket};
 use network::{NetworkManager, NetworkPlugin};
+use shared::{DEFAULT_BROKER_IP, DEFAULT_BROKER_PORT};
+use shared::{DEFAULT_ORCH_IP, DEFAULT_ORCH_PORT};
 
 const DEFAULT_DS_PORT: &str = "8001";
-const DEFAULT_ORCH_PORT: &str = "8000";
-const DEFAULT_BROKER_ADDR: &str = "127.0.0.1:8080"; // TODO: change for the proper broker address
 const DEFAULT_ZONE: &str = "shard:0";
 const DEFAULT_MAX_PLAYERS: &str = "100";
 
@@ -50,14 +50,14 @@ fn main() {
     info!("Starting dedicated server on port {}...", port);
 
     let orchestrator_addr: SocketAddr = std::env::var("ORCH_ADDR")
-        .unwrap_or_else(|_| format!("127.0.0.1:{}", DEFAULT_ORCH_PORT))
+        .unwrap_or_else(|_| format!("{}:{}", DEFAULT_ORCH_IP, DEFAULT_ORCH_PORT))
         .parse()
         .expect("Invalid ORCH_ADDR");
 
     info!("Orchestrator address: {}", orchestrator_addr);
 
     let broker_addr: SocketAddr = std::env::var("BROKER_ADDR")
-        .unwrap_or_else(|_| DEFAULT_BROKER_ADDR.to_string())
+        .unwrap_or_else(|_| format!("{}:{}", DEFAULT_BROKER_IP, DEFAULT_BROKER_PORT))
         .parse()
         .expect("Invalid BROKER_ADDR");
 

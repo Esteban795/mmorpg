@@ -64,11 +64,14 @@ pub async fn login_handler(
         server: SimpleServerInfo {
             ip: state.broker_ip.clone(),
             port: state.broker_port,
-            zone: "broker".to_string(), 
+            zone: "broker".to_string(),
         },
     };
 
-    info!("Successfully authenticated {}. Redirecting to Broker at {}:{}", payload.username, state.broker_ip, state.broker_port);
+    info!(
+        "Successfully authenticated {}. Redirecting to Broker at {}:{}",
+        payload.username, state.broker_ip, state.broker_port
+    );
     Ok(Json(response))
 
     /* OLD REDIS LOGIC, NOW USING BROKER */
@@ -171,14 +174,14 @@ pub async fn login_handler(
     //         );
     //         let fallback_server = &game_servers[0];
 
-            // Ok(Json(LoginResponse {
-            //     player_uuid: Uuid::new_v4().to_string(),
-            //     server: SimpleServerInfo {
-            //         ip: fallback_server.ip.clone(),
-            //         port: fallback_server.port,
-            //         zone: fallback_server.zone.clone(),
-            //     },
-            // }))
+    // Ok(Json(LoginResponse {
+    //     player_uuid: Uuid::new_v4().to_string(),
+    //     server: SimpleServerInfo {
+    //         ip: fallback_server.ip.clone(),
+    //         port: fallback_server.port,
+    //         zone: fallback_server.zone.clone(),
+    //     },
+    // }))
     //     }
     // }
 }

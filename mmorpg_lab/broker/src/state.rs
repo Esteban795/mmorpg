@@ -13,7 +13,7 @@ pub struct BrokerState {
     pub topic_subscribers: HashMap<Topic, HashSet<u32>>,
     // Client ID -> Topic (shard) they are subscribed to
     pub client_to_topic: HashMap<u32, Topic>,
-    
+
     // Shard routing (Topic -> Shard's Network Uuid)
     pub topic_to_shard: HashMap<Topic, Uuid>,
 

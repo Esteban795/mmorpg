@@ -48,7 +48,7 @@ fn poll_network_events(mut net: ResMut<NetworkManager>, mut registry: ResMut<Pla
                 );
                 net.broker_connection = Some(connection);
 
-                // Ask the Broker to open our 2 communication lanes
+                // Ask gamesocket to open our 2 communication lanes with broker
                 if let Err(e) = net
                     .peer
                     .create_stream(connection, GameStreamReliability::Reliable)
@@ -113,21 +113,21 @@ fn handle_broker_message(message: BrokerMessage, registry: &mut PlayerRegistry) 
                 match client_msg {
                     ClientMessage::Join { username } => {
                         let clean_username = String::from_utf8_lossy(&username)
-                        .trim_end_matches('\0')
-                        .to_string();
+                            .trim_end_matches('\0')
+                            .to_string();
 
-                    info!(
-                        "[GAME] Player {} (ID: {}) joined the shard!",
-                        clean_username, client_id
-                    );
-                    
-                    registry.players.insert(
-                        client_id,
-                        PlayerData {
-                            username: clean_username,
-                            position: Vec2::ZERO, 
-                        },
-                    );
+                        info!(
+                            "[GAME] Player {} (ID: {}) joined the shard!",
+                            clean_username, client_id
+                        );
+
+                        registry.players.insert(
+                            client_id,
+                            PlayerData {
+                                username: clean_username,
+                                position: Vec2::ZERO,
+                            },
+                        );
                         // TODO: Welcome message logic is skipped here.
                         // Usually, the Spatial Server handles telling the client where they are.
                     }
