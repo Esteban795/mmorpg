@@ -7,6 +7,7 @@ pub const TAG_PUBLISH: u8 = 0x03;
 pub const TAG_BROADCAST: u8 = 0x04;
 pub const TAG_CLIENT_INPUT: u8 = 0x05;
 pub const TAG_POSITION_UPDATE: u8 = 0x10;
+pub const TAG_CROSSING_ALERT: u8 = 0x11;
 
 // --- BINARY PROTOCOL FOR BROKER MESSAGES ---
 #[derive(Debug, Clone)]
@@ -17,6 +18,7 @@ pub enum BrokerMessage {
     Broadcast { payload: Vec<u8> },
     ClientInput { client_id: u32, input: [u8; 16] },
     PositionUpdate { client_id: u32, x: f32, y: f32 },
+    CrossingAlert {client_id : u32, owner_shard_id : u32, shards_involved : [u32; 3]}
 }
 
 impl BrokerMessage {
@@ -55,6 +57,14 @@ impl BrokerMessage {
                 buf.put_u32_le(*client_id);
                 buf.put_f32_le(*x);
                 buf.put_f32_le(*y);
+            }
+            BrokerMessage::CrossingAlert { client_id, owner_shard_id, shards_involved } => {
+                buf.put_u8(TAG_CROSSING_ALERT);
+                buf.put_u32_le(*client_id);
+                buf.put_u32_le(*owner_shard_id);
+                for shard_id in shards_involved.iter() {
+                    buf.put_u32_le(*shard_id);
+                }
             }
         }
         buf.freeze().to_vec()
@@ -130,6 +140,18 @@ impl BrokerMessage {
                 let x = buf.get_f32_le();
                 let y = buf.get_f32_le();
                 Some(BrokerMessage::PositionUpdate { client_id, x, y })
+            }
+            TAG_CROSSING_ALERT => {
+                if buf.remaining() < 20 {
+                    return None;
+                }
+                let client_id = buf.get_u32_le();
+                let owner_shard_id = buf.get_u32_le();
+                let mut shards_involved = [0u32; 3];
+                for i in 0..3 {
+                    shards_involved[i] = buf.get_u32_le();
+                }
+                Some(BrokerMessage::CrossingAlert { client_id, owner_shard_id, shards_involved })
             }
             _ => None, // Tag inconnu
         }
