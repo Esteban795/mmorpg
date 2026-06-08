@@ -1,4 +1,5 @@
 pub mod broker_protocol;
+pub mod orchestrator_protocol;
 
 use redis::{Client, RedisError, aio::MultiplexedConnection};
 use serde::{Deserialize, Serialize};
@@ -8,6 +9,10 @@ use uuid::Uuid;
 
 pub const DEFAULT_REDIS_IP: &str = "redis://127.0.0.1";
 pub const DEFAULT_GATEKEEPER_ADDR_PORT: &str = "127.0.0.1:8080";
+pub const DEFAULT_BROKER_IP: &str = "127.0.0.1";
+pub const DEFAULT_BROKER_PORT: u16 = 10001;
+pub const DEFAULT_ORCHESTRATOR_ADDR : &str = "127.0.0.1";
+pub const DEFAULT_ORCHESTRATOR_PORT: u16 = 10002;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ClientMessage {
@@ -47,6 +52,7 @@ impl fmt::Display for ServerMessage {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ServerInfo {
+    pub id: u32,
     pub ip: String,
     pub port: u16,
     pub zone: String,
