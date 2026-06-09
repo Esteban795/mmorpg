@@ -1,19 +1,18 @@
 use redis::{AsyncCommands, aio::MultiplexedConnection};
-use shared::ServerInfo;
+use shared::{DEFAULT_ORCH_HEARTBEAT_PORT, ServerInfo};
 use tokio::net::UdpSocket;
 use tracing::{error, info, warn};
 
 const BUFFER_SIZE: usize = 2048;
-const DEFAULT_ORCH_PORT: &str = "8000";
+const TTL_SECONDS: i64 = 20;
 
 //Listen to the heartbeats (currently just ServerInfo JSON sent by game servers)
 //and store the latest info in RAM using Redis with a short Time-To-Live (TTL) to automatically remove inactive servers.
 pub async fn heartbeat_listener(mut redis_conn: MultiplexedConnection) {
     // Get the port from the environment, fallback to default
     let orch_port: u16 = std::env::var("ORCH_PORT")
-        .unwrap_or_else(|_| DEFAULT_ORCH_PORT.to_string())
-        .parse()
-        .expect("Invalid ORCH_PORT configuration");
+        .map(|v| v.parse().expect("Invalid ORCH_PORT"))
+        .unwrap_or(DEFAULT_ORCH_HEARTBEAT_PORT);
 
     //Socket is binded on 0.0.0.0:8000 to receive heartbeats from all servers in the local network on any interface.
     let socket = UdpSocket::bind(("0.0.0.0", orch_port))
@@ -34,8 +33,8 @@ pub async fn heartbeat_listener(mut redis_conn: MultiplexedConnection) {
                         let _: Result<(), _> =
                             redis_conn.hset(&redis_key, "data", json_string).await;
 
-                        // Set the TTL to 15 seconds
-                        let _: Result<(), _> = redis_conn.expire(&redis_key, 15).await;
+                        // Set the TTL
+                        let _: Result<(), _> = redis_conn.expire(&redis_key, TTL_SECONDS).await;
 
                         info!(
                             "Heartbeat updated for {} (Status: {})",

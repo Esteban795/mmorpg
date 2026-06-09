@@ -1,5 +1,5 @@
 use redis::{AsyncCommands, aio::MultiplexedConnection};
-use shared::ServerInfo;
+use shared::{ServerInfo,DEFAULT_BROKER_IP, DEFAULT_BROKER_PORT, DEFAULT_ORCHESTRATOR_ADDR, DEFAULT_ORCH_HEARTBEAT_PORT};
 use std::net::UdpSocket;
 use std::time::Instant;
 use tokio::sync::mpsc;
@@ -18,7 +18,7 @@ pub async fn maintain_hot_servers(
     mut redis_conn: MultiplexedConnection,
     mut spawn_rx: mpsc::UnboundedReceiver<u32>, // Receives shard IDs for new servers to spawn on demand
 ) {
-    println!(
+    info!(
         "Scaler started. Minimum available servers required: {}",
         HOT_SERVERS_MIN
     );
@@ -139,6 +139,12 @@ async fn spawn_dedicated_server(port: u16, zone: &str, max_players: u16, shard_i
         std::env::consts::EXE_SUFFIX
     );
 
+    let orch_addr = std::env::var("ORCH_ADDR")
+    .unwrap_or_else(|_| format!("{}:{}", DEFAULT_ORCHESTRATOR_ADDR, DEFAULT_ORCH_HEARTBEAT_PORT));
+    let broker_addr = std::env::var("BROKER_ADDR")
+    .unwrap_or_else(|_| format!("{}:{}", DEFAULT_BROKER_IP, DEFAULT_BROKER_PORT));
+
+
     let executable_path = std::env::var("DEDICATED_SERVER_PATH").unwrap_or(default_path);
 
     match tokio::process::Command::new(&executable_path)
@@ -146,6 +152,8 @@ async fn spawn_dedicated_server(port: u16, zone: &str, max_players: u16, shard_i
         .env("DS_ZONE", zone)
         .env("DS_MAX_PLAYERS", max_players.to_string())
         .env("DS_SHARD_ID", shard_id.to_string())
+        .env("ORCH_ADDR", orch_addr)   
+        .env("BROKER_ADDR", broker_addr)
         .spawn()
     {
         Ok(_) => info!("Dedicated server started successfully."),

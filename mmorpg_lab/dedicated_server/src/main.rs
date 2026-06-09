@@ -12,7 +12,7 @@ use tracing_subscriber::FmtSubscriber;
 use heartbeat::{HeartbeatPlugin, HeartbeatSocket};
 use network::{NetworkManager, NetworkPlugin};
 use shared::{DEFAULT_BROKER_IP, DEFAULT_BROKER_PORT};
-use shared::{DEFAULT_ORCHESTRATOR_ADDR, DEFAULT_ORCHESTRATOR_PORT};
+use shared::{DEFAULT_ORCHESTRATOR_ADDR, DEFAULT_ORCH_HEARTBEAT_PORT};
 
 const DEFAULT_DS_PORT: &str = "8001";
 const DEFAULT_ZONE: &str = "shard:0";
@@ -55,7 +55,7 @@ fn main() {
         .unwrap_or_else(|_| {
             format!(
                 "{}:{}",
-                DEFAULT_ORCHESTRATOR_ADDR, DEFAULT_ORCHESTRATOR_PORT
+                DEFAULT_ORCHESTRATOR_ADDR, DEFAULT_ORCH_HEARTBEAT_PORT
             )
         })
         .parse()

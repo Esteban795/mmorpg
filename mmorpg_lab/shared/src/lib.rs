@@ -11,7 +11,8 @@ pub const DEFAULT_GATEKEEPER_ADDR_PORT: &str = "127.0.0.1:8080";
 pub const DEFAULT_BROKER_IP: &str = "127.0.0.1";
 pub const DEFAULT_BROKER_PORT: u16 = 10001;
 pub const DEFAULT_ORCHESTRATOR_ADDR : &str = "127.0.0.1";
-pub const DEFAULT_ORCHESTRATOR_PORT: u16 = 10002;
+pub const DEFAULT_ORCHESTRATOR_QUIC_PORT: u16 = 10002;
+pub const DEFAULT_ORCH_HEARTBEAT_PORT: u16 = 8000;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ClientMessage {
