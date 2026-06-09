@@ -170,6 +170,19 @@ fn handle_broker_message(message: BrokerMessage, registry: &mut PlayerRegistry) 
                             );
                         }
                     }
+                    ClientMessage::Disconnect => {
+                        if let Some(player) = registry.players.remove(&client_id) {
+                            info!(
+                                "[GAME] Player {} (ID: {}) disconnected from the shard.",
+                                player.username, client_id
+                            );
+                        } else {
+                            info!(
+                                "[GAME] Unknown player with ID: {} disconnected from the shard.",
+                                client_id
+                            );
+                        }
+                    }
                 }
             }
         }

@@ -20,6 +20,8 @@ pub enum ClientMessage {
     Join { username: [u8; 12] },
     // For the AOI, direction vector (x = -1 for right/y = -1 for down, 0 for no movement, x = +1 for left/y = +1 for up)
     MoveInput { x: f32, y: f32 },
+    //4 bytes, will have to pad it to 16 bytes to fit in the input struct of the broker protocol.
+    Disconnect,
 }
 
 impl fmt::Display for ClientMessage {
@@ -30,6 +32,7 @@ impl fmt::Display for ClientMessage {
                 write!(f, "Join {{ username: {} }}", name)
             }
             ClientMessage::MoveInput { x, y } => write!(f, "MoveInput {{ x: {}, y: {} }}", x, y),
+            ClientMessage::Disconnect => write!(f, "Disconnect"),
         }
     }
 }

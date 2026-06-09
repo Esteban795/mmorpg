@@ -59,7 +59,37 @@ pub fn process_network_events(mut network: ResMut<BrokerNetwork>, mut state: Res
 
                 if let Some(id) = state.uuid_to_id.remove(&conn.connection_id) {
                     state.id_to_uuid.remove(&id);
+
+                    //If the client was subscribed to a shard/topic
                     if let Some(topic) = state.client_to_topic.remove(&id) {
+
+                        //Inform the shard of the disconnect so it can remove the player from the AOI and broadcast the update to other clients.
+                        if let Some(&shard_uuid) = state.topic_to_shard.get(&topic) {
+                            if let Some(shard_stream) =
+                                state.connection_reliable_streams.get(&shard_uuid)
+                            {
+                                let disconnect_msg = ClientMessage::Disconnect;
+                                // Pad the disconnect message to 16 bytes to fit the broker protocol's ClientInput struct, even though the payload is empty for Disconnect.
+                                if let Ok(input_bytes) = bincode::serialize(&disconnect_msg) {
+                                    let mut input_array = [0u8; 16];
+                                    let len = input_bytes.len().min(16);
+                                    input_array[..len].copy_from_slice(&input_bytes[..len]);
+
+                                    let forward_msg = BrokerMessage::ClientInput {
+                                        client_id: id,
+                                        input: input_array,
+                                    }
+                                    .to_bytes();
+
+                                    let _ = network.peer.send(
+                                        &shard_uuid.into(),
+                                        shard_stream,
+                                        Bytes::from(forward_msg),
+                                    );
+                                }
+                            }
+                        }
+
                         if let Some(subs) = state.topic_subscribers.get_mut(&topic) {
                             subs.remove(&id);
                         }
