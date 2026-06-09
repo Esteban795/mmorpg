@@ -37,7 +37,11 @@ impl Plugin for NetworkPlugin {
     }
 }
 
-fn poll_network_events(mut net: ResMut<NetworkManager>, mut registry: ResMut<PlayerRegistry>) {
+fn poll_network_events(
+    mut net: ResMut<NetworkManager>,
+    mut registry: ResMut<PlayerRegistry>,
+    config: Res<ServerConfig>,
+) {
     while let Ok(Some(event)) = net.peer.poll() {
         match event {
             // Connection event WITH THE BROKER
@@ -65,7 +69,25 @@ fn poll_network_events(mut net: ResMut<NetworkManager>, mut registry: ResMut<Pla
             // Broker lanes are ready
             GameNetworkEvent::StreamCreated(_connection, stream) => {
                 if stream.is_reliable() {
-                    info!("[NETWORK] Reliable stream to Broker is ready.");
+                    info!("[NETWORK] Reliable stream to Broker is ready. Registering shard.");
+
+                    let topic = string_to_topic(&format!("shard:{}", config.id));
+                    let dummy_msg = BrokerMessage::Publish {
+                        topic,
+                        payload: vec![], // Empty payload sets the route without broadcasting data
+                    };
+
+                    if let Err(e) =
+                        net.peer
+                            .send(&_connection, &stream, Bytes::from(dummy_msg.to_bytes()))
+                    {
+                        error!("Failed to send dummy publish: {:?}", e);
+                    } else {
+                        info!(
+                            "[NETWORK] Successfully registered to topic: {}",
+                            config.zone
+                        );
+                    }
                     net.reliable_stream = Some(stream);
                 } else {
                     info!("[NETWORK] Unreliable stream to Broker is ready.");
