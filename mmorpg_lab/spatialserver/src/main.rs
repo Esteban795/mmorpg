@@ -1,6 +1,7 @@
 pub mod quadtree;
 pub mod rect;
 pub mod spatialservice;
+pub mod util;
 
 use crate::spatialservice::SpatialService;
 
