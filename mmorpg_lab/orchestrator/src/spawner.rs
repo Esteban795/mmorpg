@@ -1,9 +1,8 @@
-use redis::{AsyncCommands, aio::MultiplexedConnection};
-use shared::{ServerInfo,DEFAULT_BROKER_IP, DEFAULT_BROKER_PORT, DEFAULT_ORCHESTRATOR_ADDR, DEFAULT_ORCH_HEARTBEAT_PORT};
+use shared::{
+    DEFAULT_BROKER_IP, DEFAULT_BROKER_PORT, DEFAULT_ORCH_HEARTBEAT_PORT, DEFAULT_ORCHESTRATOR_ADDR,
+};
 use std::net::UdpSocket;
-use std::time::Instant;
 use tokio::sync::mpsc;
-use tokio::time::{Duration, interval};
 use tracing::{error, info};
 
 //Settings for the spawner. Adjust as needed for testing or production.
@@ -14,86 +13,33 @@ const MAX_PORT: u16 = 9000;
 const TICKING_INTERVAL_SECS: u64 = 5;
 const BOOT_TIMEOUT_SECS: u64 = 20;
 
-pub async fn maintain_hot_servers(
-    mut redis_conn: MultiplexedConnection,
-    mut spawn_rx: mpsc::UnboundedReceiver<u32>, // Receives shard IDs for new servers to spawn on demand
-) {
-    info!(
-        "Scaler started. Minimum available servers required: {}",
-        HOT_SERVERS_MIN
-    );
+pub async fn maintain_hot_servers(mut spawn_rx: mpsc::UnboundedReceiver<u32>) {
+    info!("Lazy Spawner started. Booting default lobby (shard:0)...");
 
-    let mut ticker = interval(Duration::from_secs(TICKING_INTERVAL_SECS));
     let mut port_cursor: u16 = STARTING_PORT;
-    let mut pending_spawns: Vec<Instant> = Vec::new();
-    let boot_timeout = Duration::from_secs(BOOT_TIMEOUT_SECS);
 
-    loop {
-        tokio::select! {
-            // Ehhhh i don't know if it should still work or not ??? Are we supposed to keep backup servers in case a game server
-            // crashes so we can switch it up instantly ? could work
-            // But this also breaks up because of the IDs ? so idk
-            _ = ticker.tick() => {
-                let now = Instant::now();
-                pending_spawns.retain(|&spawn_time| now.duration_since(spawn_time) < boot_timeout);
+    // Starts with a default lobby (shard:0) always up and running
+    let initial_port = find_free_port(&mut port_cursor);
+    spawn_dedicated_server(initial_port, "shard:0", MAX_PLAYERS_PER_SERVER, 0).await;
+    info!("Default lobby (shard:0) launched. Awaiting split requests from Spatial Server...");
 
-                let available_count = count_available_servers(&mut redis_conn).await;
-                let projected_count = available_count + pending_spawns.len();
-
-                if projected_count < HOT_SERVERS_MIN {
-                    let servers_to_spawn = HOT_SERVERS_MIN - projected_count;
-                    for _ in 0..servers_to_spawn {
-                        let free_port = find_free_port(&mut port_cursor);
-
-
-                        spawn_dedicated_server(free_port, "Canada", MAX_PLAYERS_PER_SERVER, 0).await;
-                        pending_spawns.push(now);
-                    }
-                }
-            }
-
-            Some(new_shard_id) = spawn_rx.recv() => {
-                info!("Split request received : launching new shard with id {}", new_shard_id);
-                let free_port = find_free_port(&mut port_cursor);
-                spawn_dedicated_server(free_port, "Canada", MAX_PLAYERS_PER_SERVER, new_shard_id).await;
-            }
+    // Spawn hot servers on demand as split requests come in from the Spatial Server,
+    // and assign them a given shard ID and a free port.
+    while let Some(new_shard_id) = spawn_rx.recv().await {
+        // ignores shard 0
+        if new_shard_id == 0 {
+            continue;
         }
+
+        info!(
+            "Split request received: launching new shard with id {}",
+            new_shard_id
+        );
+        let free_port = find_free_port(&mut port_cursor);
+        let zone_name = format!("shard:{}", new_shard_id);
+
+        spawn_dedicated_server(free_port, &zone_name, MAX_PLAYERS_PER_SERVER, new_shard_id).await;
     }
-}
-
-// Scans Redis for all active servers, downloads their JSON from the "data" field,
-// and counts how many are marked as "available".
-async fn count_available_servers(redis_conn: &mut MultiplexedConnection) -> usize {
-    let mut available = 0;
-    let mut server_keys = Vec::new();
-
-    // SCAN for all server keys
-    {
-        let mut scan_iter = match redis_conn.scan_match::<_, String>("server:*").await {
-            Ok(iter) => iter,
-            Err(e) => {
-                error!("Error scanning Redis for servers: {}", e);
-                return 0;
-            }
-        };
-
-        while let Some(key) = scan_iter.next_item().await {
-            server_keys.push(key);
-        }
-    }
-
-    // HGET the "data" field and parse the JSON to get availability status
-    for key in server_keys {
-        if let Ok(server_json) = redis_conn.hget::<_, _, String>(&key, "data").await {
-            if let Ok(info) = serde_json::from_str::<ServerInfo>(&server_json) {
-                if info.status == "available" {
-                    available += 1;
-                }
-            }
-        }
-    }
-
-    available
 }
 
 // Helper function to scan for a free port safely.
@@ -139,11 +85,14 @@ async fn spawn_dedicated_server(port: u16, zone: &str, max_players: u16, shard_i
         std::env::consts::EXE_SUFFIX
     );
 
-    let orch_addr = std::env::var("ORCH_ADDR")
-    .unwrap_or_else(|_| format!("{}:{}", DEFAULT_ORCHESTRATOR_ADDR, DEFAULT_ORCH_HEARTBEAT_PORT));
+    let orch_addr = std::env::var("ORCH_ADDR").unwrap_or_else(|_| {
+        format!(
+            "{}:{}",
+            DEFAULT_ORCHESTRATOR_ADDR, DEFAULT_ORCH_HEARTBEAT_PORT
+        )
+    });
     let broker_addr = std::env::var("BROKER_ADDR")
-    .unwrap_or_else(|_| format!("{}:{}", DEFAULT_BROKER_IP, DEFAULT_BROKER_PORT));
-
+        .unwrap_or_else(|_| format!("{}:{}", DEFAULT_BROKER_IP, DEFAULT_BROKER_PORT));
 
     let executable_path = std::env::var("DEDICATED_SERVER_PATH").unwrap_or(default_path);
 
@@ -152,7 +101,7 @@ async fn spawn_dedicated_server(port: u16, zone: &str, max_players: u16, shard_i
         .env("DS_ZONE", zone)
         .env("DS_MAX_PLAYERS", max_players.to_string())
         .env("DS_SHARD_ID", shard_id.to_string())
-        .env("ORCH_ADDR", orch_addr)   
+        .env("ORCH_ADDR", orch_addr)
         .env("BROKER_ADDR", broker_addr)
         .spawn()
     {

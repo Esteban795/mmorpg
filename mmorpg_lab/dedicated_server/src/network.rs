@@ -176,8 +176,8 @@ fn handle_broker_message(
                             client_id,
                             PlayerData {
                                 username: clean_username,
-                                position: Vec2::ZERO,
-                                velocity: Vec2::ZERO,
+                                position: Vec2::new(-250.0, -250.0),
+                                velocity: Vec2::new(-250.0, -250.0),
                                 state: EntityState::Owned,
                             },
                         );
@@ -187,9 +187,27 @@ fn handle_broker_message(
                             let speed = 5.0;
                             player.velocity = Vec2::new(x * speed, y * speed);
                             player.position += player.velocity;
+
+                            info!(
+                                "[GAME] Received input from player {} (ID: {}). New position: ({:.2}, {:.2})",
+                                player.username, client_id, player.position.x, player.position.y
+                            );
                         }
                         // Ignores the input if the player is not registered
                         // Can be when an entity is not already spawned with ghost state
+                    }
+                    ClientMessage::Disconnect => {
+                        if let Some(player) = registry.players.remove(&client_id) {
+                            info!(
+                                "[GAME] Player {} (ID: {}) disconnected from the shard.",
+                                player.username, client_id
+                            );
+                        } else {
+                            info!(
+                                "[GAME] Unknown player with ID: {} disconnected from the shard.",
+                                client_id
+                            );
+                        }
                     }
                 }
             }
@@ -299,19 +317,6 @@ fn handle_broker_message(
                                 "CROSSING EXIT: {} stays in PendingHandoff for {} other margin(s)",
                                 client_id,
                                 neighbor_topics.len()
-                            );
-                        }
-                    }
-                    ClientMessage::Disconnect => {
-                        if let Some(player) = registry.players.remove(&client_id) {
-                            info!(
-                                "[GAME] Player {} (ID: {}) disconnected from the shard.",
-                                player.username, client_id
-                            );
-                        } else {
-                            info!(
-                                "[GAME] Unknown player with ID: {} disconnected from the shard.",
-                                client_id
                             );
                         }
                     }

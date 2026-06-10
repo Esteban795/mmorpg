@@ -58,6 +58,5 @@ async fn main() {
     });
 
     //Start the server scaling manager
-    let spawner_redis = redis_conn.clone();
-    spawner::maintain_hot_servers(spawner_redis, spawn_rx).await;
+    spawner::maintain_hot_servers(spawn_rx).await;
 }

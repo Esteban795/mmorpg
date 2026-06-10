@@ -94,6 +94,7 @@ fn handle_network(
                         &mut game_state,
                         &mut targets,
                         current_time,
+                        &mut net,
                     );
                 }
                 GameNetworkEvent::Disconnected(_) => {
@@ -164,6 +165,7 @@ fn handle_stream_created(
 
         // Send fake input to wake up the stream and make sure it's ready for low-latency messages
         //(and show all players in the AOI right after login, without waiting for the first real input from the player)
+        // TODO: This move input is most likely to be dropped by the server since the client ID is not known yet, but it serves the purpose of waking up the stream.
         let wake_up_msg = ClientMessage::MoveInput { x: 0.0, y: 0.0 };
         match bincode::serialize(&wake_up_msg) {
             Ok(bytes) => {
@@ -173,7 +175,7 @@ fn handle_stream_created(
                 input_array[..len].copy_from_slice(&bytes[..len]);
 
                 let broker_msg = BrokerMessage::ClientInput {
-                    client_id: 0, // TODO: wait for the broker's welcome message to get the actual client ID before sending inputs
+                    client_id: 0,
                     input: input_array,
                 };
 
@@ -194,6 +196,7 @@ fn handle_server_message(
     game_state: &mut crate::game::GameState,
     targets: &mut Query<&mut TargetPosition>,
     current_time: f64,
+    net: &mut ClientNetworkManager,
 ) {
     // Deserialize the broker message from the received bytes. If deserialization fails, log a warning and ignore the message.
     let Some(broker_message) = BrokerMessage::from_bytes(data) else {
@@ -208,6 +211,41 @@ fn handle_server_message(
                     ServerMessage::Welcome { player_id } => {
                         info!("[CLIENT]: Welcome ! My ID is: {}", player_id);
                         game_state.my_id = Some(player_id);
+
+                        // Send fake input to wake up the stream and make sure it's ready for low-latency messages
+                        //(and show all players in the AOI right after login, without waiting for the first real input from the player)
+                        if let (Some(peer), Some(conn), Some(stream)) = (
+                            &mut net.peer,
+                            &net.server_connection,
+                            &net.unreliable_stream,
+                        ) {
+                            let wake_up_msg = ClientMessage::MoveInput { x: 0.0, y: 0.0 };
+
+                            if let Ok(bytes) = bincode::serialize(&wake_up_msg) {
+                                let mut input_array = [0u8; 16];
+                                let len = bytes.len().min(16);
+                                input_array[..len].copy_from_slice(&bytes[..len]);
+
+                                let broker_msg = BrokerMessage::ClientInput {
+                                    client_id: player_id,
+                                    input: input_array,
+                                };
+
+                                if let Err(e) = peer.send(
+                                    conn,
+                                    stream,
+                                    bytes::Bytes::from(broker_msg.to_bytes()),
+                                ) {
+                                    error!("[CLIENT] Failed to send wake-up message: {:?}", e);
+                                } else {
+                                    info!("[CLIENT] Wake-up message sent successfully.");
+                                }
+                            }
+                        } else {
+                            error!(
+                                "[CLIENT] Cannot send wake-up message: peer, connection or stream not ready."
+                            );
+                        }
                     }
                     ServerMessage::AOISnapshot { players } => {
                         crate::network::handle_aoi_snapshot(
