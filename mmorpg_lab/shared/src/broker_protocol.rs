@@ -7,6 +7,7 @@ pub const TAG_PUBLISH: u8 = 0x03;
 pub const TAG_BROADCAST: u8 = 0x04;
 pub const TAG_CLIENT_INPUT: u8 = 0x05;
 pub const TAG_POSITION_UPDATE: u8 = 0x10;
+pub const TAG_SHARD_READY: u8 = 0x11;
 
 // Spatial Server messages
 pub const TAG_CROSSING_ALERT: u8 = 0x25;
@@ -47,6 +48,9 @@ pub enum BrokerMessage {
         client_id: u32,
         x: f32,
         y: f32,
+    },
+    ShardReady {
+        shard_id: u32,
     },
 
     // Spatial server messages
@@ -151,6 +155,10 @@ impl BrokerMessage {
                 buf.put_slice(topic_from);
                 buf.put_u16_le(payload.len() as u16);
                 buf.put_slice(payload);
+            }
+            BrokerMessage::ShardReady { shard_id } => {
+                buf.put_u8(TAG_SHARD_READY);
+                buf.put_u32_le(*shard_id);
             }
         }
         buf.freeze().to_vec()
@@ -291,6 +299,13 @@ impl BrokerMessage {
                     topic_from,
                     payload,
                 })
+            }
+            TAG_SHARD_READY => {
+                if buf.remaining() < 4 {
+                    return None;
+                }
+                let shard_id = buf.get_u32_le();
+                Some(BrokerMessage::ShardReady { shard_id })
             }
             _ => None, // Unknown tag
         }

@@ -4,11 +4,13 @@ use tracing::{error, info, warn};
 
 use crate::quadtree::{QuadTree, SplitData};
 use crate::rect::{Rect, Vec2};
+use crate::util::{get_added_ids, get_removed_ids};
 use bytes::Bytes;
-use game_sockets::{GameNetworkEvent, GamePeer, protocols::QuicBackend};
-use shared::broker_protocol::BrokerMessage;
+use game_sockets::{protocols::QuicBackend, GameNetworkEvent, GamePeer};
+use shared::broker_protocol::{string_to_topic, BrokerMessage};
 use shared::orchestrator_protocol::OrchestratorMessage;
 
+const MARGIN: f32 = 50.0;
 pub struct QuicConnection {
     pub peer: GamePeer,
     pub connection: Option<game_sockets::GameConnection>,
@@ -23,6 +25,7 @@ pub struct SpatialService {
     // QUIC connections to the broker & orchestrator
     pub quic_broker: Option<QuicConnection>,
     pub quic_orchestrator: Option<QuicConnection>,
+    client_crossing_state: HashMap<u32, Vec<u32>>,
 }
 
 impl SpatialService {
@@ -74,11 +77,12 @@ impl SpatialService {
                 0,
                 4,
                 2,
-                1,
+                0,
             ),
             client_shards: HashMap::new(),
             quic_broker: quic_broker,
             quic_orchestrator: quic_orchestrator,
+            client_crossing_state: HashMap::new(),
         }
     }
 
@@ -342,9 +346,22 @@ impl SpatialService {
             // if insertion required a split, it will NOT send anything on the network before orchestrator tells us the new shard is ready
             if old_network_shard != Some(result.network_shard_id) {
                 if let Some(old) = old_network_shard {
-                    self.send_unsubscribe(client_id, old);
+                    // Player was already in the quadtree, so we need to send a switch authority alert to the broker instead of a simple subscribe
+                    info!(
+                        "Player {} moved from shard {} to shard {}, sending switch authority alert to broker",
+                        client_id, old, result.network_shard_id
+                    );
+                    self.emit_switch_authority(client_id, old, result.network_shard_id);
+                } else {
+                    // New player, just subscribe to the new shard
+                    info!(
+                        "New player {} inserted in shard {}, subscribing to it",
+                        client_id, result.network_shard_id
+                    );
+                    self.send_subscribe(client_id, result.network_shard_id);
+                    self.client_crossing_state.insert(client_id, vec![result.network_shard_id]);
                 }
-                self.send_subscribe(client_id, result.network_shard_id);
+
                 self.client_shards
                     .insert(client_id, result.network_shard_id);
             }
@@ -355,6 +372,30 @@ impl SpatialService {
                     split_data.parent_shard_id
                 );
                 self.request_orchestrator_split(split_data);
+            }
+
+            // Crossing alert check :
+            // if the player is near the border of its shard, we check if there are nearby shards and send an alert to the broker
+            let shards_near = self.quad_tree.shards_near(&pos, MARGIN);
+
+            let old_nearby = self
+                .client_crossing_state
+                .get(&client_id)
+                .cloned()
+                .unwrap_or_default();
+
+            if shards_near != old_nearby {
+
+                let added = get_added_ids(&old_nearby, &shards_near);
+                let removed = get_removed_ids(&old_nearby, &shards_near);
+
+                for neighbor_shard_id in added {
+                     self.emit_crossing_alert(client_id, result.network_shard_id, neighbor_shard_id);
+                }
+                for neighbor_shard_id in removed {
+                    self.emit_crossing_exit(client_id, neighbor_shard_id, result.network_shard_id);
+                }
+                self.client_crossing_state.insert(client_id, shards_near);
             }
         }
     }
@@ -419,10 +460,7 @@ impl SpatialService {
     fn send_unsubscribe(&self, client_id: u32, shard_id: u32) {
         let topic = format!("shard:{}", shard_id);
         info!(client_id, topic, "Unsubscribe");
-        let mut topic_bytes = [0u8; 32];
-        let bytes = topic.as_bytes();
-        let len = bytes.len().min(topic_bytes.len());
-        topic_bytes[..len].copy_from_slice(&bytes[..len]);
+        let topic_bytes = string_to_topic(&topic);
         let msg = BrokerMessage::Unsubscribe {
             client_id,
             topic: topic_bytes,
@@ -446,11 +484,9 @@ impl SpatialService {
 
     fn send_subscribe(&self, client_id: u32, shard_id: u32) {
         let topic = format!("shard:{}", shard_id);
+
         info!(client_id, topic, "Subscribe");
-        let mut topic_bytes = [0u8; 32];
-        let bytes = topic.as_bytes();
-        let len = bytes.len().min(topic_bytes.len());
-        topic_bytes[..len].copy_from_slice(&bytes[..len]);
+        let topic_bytes = string_to_topic(&topic);
 
         let msg = BrokerMessage::Subscribe {
             client_id,
@@ -473,15 +509,100 @@ impl SpatialService {
         }
     }
 
-    // fn emit_crossing_alert(
-    //     &self,
-    //     connection: &game_sockets::GameConnection,
-    //     client_id: u32,
-    //     nearby_shards: Vec<u32>,
-    // ) {
-    //     info!(client_id, ?nearby_shards, "CrossingAlert émis");
-    //     // TODO: Call broker
-    //     // FOR ALL  nearby_shards
-    //     //     envoyer au broker de subscribe cette shard au topic client:<client_id>
-    // }
+    fn emit_crossing_alert(&self, client_id: u32, owner_shard_id: u32, neighbor_shard_id: u32) {
+        info!(client_id, ?neighbor_shard_id, "CrossingAlert");
+
+        let topic = format!("shard:{}", owner_shard_id);
+        let topic_bytes = string_to_topic(&topic);
+
+        let neighbor_topic = format!("shard:{}", neighbor_shard_id);
+        let neighbor_topic_bytes = string_to_topic(&neighbor_topic);
+
+        let msg = BrokerMessage::CrossingAlert {
+            client_id,
+            dest_authority_topic: topic_bytes,
+            neighbor_topic: neighbor_topic_bytes,
+        };
+
+        if let Some(broker) = &self.quic_broker {
+            if let Some(peer) = Some(&broker.peer) {
+                if let Some(connection) = &broker.connection {
+                    if let Some(stream) = &broker.reliable_stream {
+                        if let Err(e) = peer.send(connection, stream, Bytes::from(msg.to_bytes())) {
+                            error!(
+                                " Failed to send crossing alert message for client {}: {:?}",
+                                client_id, e
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn emit_switch_authority(&self, client_id: u32, owner_shard_id: u32, neighbor_shard_id: u32) {
+        info!(
+            client_id,
+            owner_shard_id, neighbor_shard_id, "SwitchAuthority"
+        );
+
+
+        let topic = format!("shard:{}", owner_shard_id);
+        let topic_bytes = string_to_topic(&topic);
+
+        let neighbor_topic = format!("shard:{}", neighbor_shard_id);
+        let neighbor_topic_bytes = string_to_topic(&neighbor_topic);
+
+        let msg = BrokerMessage::AuthoritySwitch {
+            client_id,
+            old_auth_topic: topic_bytes,
+            new_auth_topic: neighbor_topic_bytes,
+        };
+
+        if let Some(broker) = &self.quic_broker {
+            if let Some(peer) = Some(&broker.peer) {
+                if let Some(connection) = &broker.connection {
+                    if let Some(stream) = &broker.reliable_stream {
+                        if let Err(e) = peer.send(connection, stream, Bytes::from(msg.to_bytes())) {
+                            error!(
+                                " Failed to send switch authority message for client {}: {:?}",
+                                client_id, e
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn emit_crossing_exit(&self, client_id: u32, old_shard_id: u32, owner_shard_id: u32) {
+        info!(client_id, old_shard_id, owner_shard_id, "CrossingExit");
+
+        let old_topic = format!("shard:{}", old_shard_id);
+        let new_topic = format!("shard:{}", owner_shard_id);
+
+        let old_topic_bytes = string_to_topic(&old_topic);
+        let new_topic_bytes = string_to_topic(&new_topic);
+
+        let msg = BrokerMessage::CrossingExit {
+            client_id,
+            obsolete_auth_topic: old_topic_bytes,
+            new_auth_topic: new_topic_bytes,
+        };
+
+        if let Some(broker) = &self.quic_broker {
+            if let Some(peer) = Some(&broker.peer) {
+                if let Some(connection) = &broker.connection {
+                    if let Some(stream) = &broker.reliable_stream {
+                        if let Err(e) = peer.send(connection, stream, Bytes::from(msg.to_bytes())) {
+                            error!(
+                                " Failed to send crossing exit message for client {}: {:?}",
+                                client_id, e
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
