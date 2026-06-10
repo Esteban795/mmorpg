@@ -15,6 +15,12 @@ pub struct GameState {
     pub spawned_players: HashMap<u32, (Entity, f64)>, // maps client ID to the corresponding player entity in the world with its last update timestamp (for interpolation)
 }
 
+#[derive(Component)] // Component to store the server's target position for interpolation
+pub struct TargetPosition {
+    pub x: f32,
+    pub y: f32,
+}
+
 #[derive(Component)]
 pub struct PlayerComponent; // Tag component to identify player entities
 
@@ -24,7 +30,7 @@ impl Plugin for GamePlugin {
             .add_systems(OnEnter(AppState::InGame), setup_map)
             .add_systems(
                 Update,
-                (player_input, move_camera).run_if(in_state(AppState::InGame)),
+                (player_input, smooth_movement, move_camera).run_if(in_state(AppState::InGame)),
             );
     }
 }
@@ -102,5 +108,18 @@ fn move_camera(
                 }
             }
         }
+    }
+}
+
+fn smooth_movement(time: Res<Time>, mut query: Query<(&mut Transform, &TargetPosition)>) {
+    // the higher the lerp_factor, the snappier the movement (less interpolation).
+    // The lower, the smoother but more delayed. We can adjust it based on the network conditions or player preferences.
+    let lerp_factor = 15.0 * time.delta_secs();
+
+    for (mut transform, target) in &mut query {
+        let target_vec = Vec3::new(target.x, target.y, transform.translation.z);
+
+        // Interpolate the current position towards the target position using linear interpolation (lerp)
+        transform.translation = transform.translation.lerp(target_vec, lerp_factor);
     }
 }

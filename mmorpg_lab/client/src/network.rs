@@ -7,6 +7,7 @@ use game_sockets::{
 use shared::broker_protocol::BrokerMessage;
 use shared::{ClientMessage, ServerMessage};
 
+use crate::game::TargetPosition;
 use crate::loginmenu::ConnectionSettings;
 use crate::state::AppState;
 
@@ -59,7 +60,7 @@ fn handle_network(
     settings: Res<ConnectionSettings>,
     mut commands: Commands,
     mut game_state: ResMut<crate::game::GameState>,
-    mut transforms: Query<&mut Transform>,
+    mut targets: Query<&mut TargetPosition>,
     time: Res<Time>,
 ) {
     let current_time = time.elapsed_secs_f64();
@@ -91,7 +92,7 @@ fn handle_network(
                         &data,
                         &mut commands,
                         &mut game_state,
-                        &mut transforms,
+                        &mut targets,
                         current_time,
                     );
                 }
@@ -191,7 +192,7 @@ fn handle_server_message(
     data: &[u8],
     commands: &mut Commands,
     game_state: &mut crate::game::GameState,
-    transforms: &mut Query<&mut Transform>,
+    targets: &mut Query<&mut TargetPosition>,
     current_time: f64,
 ) {
     // Deserialize the broker message from the received bytes. If deserialization fails, log a warning and ignore the message.
@@ -213,7 +214,7 @@ fn handle_server_message(
                             players,
                             commands,
                             game_state,
-                            transforms,
+                            targets,
                             current_time,
                         );
                     }
@@ -232,7 +233,7 @@ fn handle_aoi_snapshot(
     players: Vec<shared::PlayerState>,
     commands: &mut Commands,
     game_state: &mut crate::game::GameState,
-    transforms: &mut Query<&mut Transform>,
+    targets: &mut Query<&mut TargetPosition>,
     current_time: f64,
 ) {
     let mut current_frame_ids = Vec::new();
@@ -243,9 +244,9 @@ fn handle_aoi_snapshot(
         if let Some(&mut (entity, ref mut last_seen)) = game_state.spawned_players.get_mut(&p.id) {
             // Existing player in AOI, update their position and last seen timestamp
             *last_seen = current_time;
-            if let Ok(mut transform) = transforms.get_mut(entity) {
-                transform.translation.x = p.x;
-                transform.translation.y = p.y;
+            if let Ok(mut target) = targets.get_mut(entity) {
+                target.x = p.x;
+                target.y = p.y;
             }
         } else {
             // new player in AOI, spawn an entity for them
@@ -272,6 +273,7 @@ fn handle_aoi_snapshot(
                     },
                     Transform::from_xyz(p.x, p.y, 0.0),
                     crate::game::PlayerComponent,
+                    crate::game::TargetPosition { x: p.x, y: p.y },
                 ))
                 .with_children(|parent| {
                     // Display the player's username above their character
