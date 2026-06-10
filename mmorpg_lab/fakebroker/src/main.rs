@@ -76,7 +76,7 @@ fn main() {
             x: -250.0,
             y: 250.0,
             factor_x: 0.0,
-            factor_y:0.0,
+            factor_y: 0.0,
         },
     );
 
@@ -93,6 +93,8 @@ fn main() {
 
     let player_count = player_registry.players.len();
 
+    let mut temp = 0;
+    let mut shard_index = 1;
     let mut maxcount = 5;
     loop {
         if should_send {
@@ -107,7 +109,7 @@ fn main() {
             if maxcount <= 0 {
                 if player.x > 40.0 {
                     player.factor_x = -10.0;
-                } 
+                }
             }
             let update_msg = BrokerMessage::PositionUpdate {
                 client_id,
@@ -127,6 +129,27 @@ fn main() {
                         Bytes::from(update_msg.to_bytes()),
                     ) {
                         error!("Failed to send message on unreliable stream: {:?}", e);
+                    }
+                }
+            }
+
+            if temp % 1000 == 0 && maxcount <= 0 {
+
+                let shard_ready_msg = BrokerMessage::ShardReady { shard_id: shard_index };
+                shard_index += 1;
+                if let Some(connection) = &conn {
+                    info!(
+                        "Sending ShardReady {{ shard_id: {} }} to client {} on connection {:?}",
+                        shard_index , client_id, connection
+                    );
+                    if let Some(ref unrel_stream) = unreliable_stream {
+                        if let Err(e) = peer.send(
+                            &connection,
+                            &unrel_stream,
+                            Bytes::from(shard_ready_msg.to_bytes()),
+                        ) {
+                            error!("Failed to send message on unreliable stream: {:?}", e);
+                        }
                     }
                 }
             }
