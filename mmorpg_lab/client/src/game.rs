@@ -12,7 +12,7 @@ pub struct GamePlugin;
 #[derive(Resource, Default)]
 pub struct GameState {
     pub my_id: Option<u32>,
-    pub spawned_players: HashMap<u32, Entity>, // maps client ID to the corresponding player entity in the world
+    pub spawned_players: HashMap<u32, (Entity, f64)>, // maps client ID to the corresponding player entity in the world with its last update timestamp (for interpolation)
 }
 
 #[derive(Component)]
@@ -94,7 +94,7 @@ fn move_camera(
     mut camera_query: Query<&mut Transform, (With<Camera>, Without<PlayerComponent>)>,
 ) {
     if let Some(my_id) = game_state.my_id {
-        if let Some(&entity) = game_state.spawned_players.get(&my_id) {
+        if let Some(&(entity, _)) = game_state.spawned_players.get(&my_id) {
             if let Ok(player_transform) = player_query.get(entity) {
                 if let Ok(mut camera_transform) = camera_query.single_mut() {
                     camera_transform.translation.x = player_transform.translation.x;

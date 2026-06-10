@@ -60,7 +60,10 @@ fn handle_network(
     mut commands: Commands,
     mut game_state: ResMut<crate::game::GameState>,
     mut transforms: Query<&mut Transform>,
+    time: Res<Time>,
 ) {
+    let current_time = time.elapsed_secs_f64();
+
     loop {
         let event_result = if let Some(peer) = &mut net.peer {
             peer.poll()
@@ -84,7 +87,13 @@ fn handle_network(
                     handle_stream_created(conn, stream, &mut net, &settings);
                 }
                 GameNetworkEvent::Message { data, .. } => {
-                    handle_server_message(&data, &mut commands, &mut game_state, &mut transforms);
+                    handle_server_message(
+                        &data,
+                        &mut commands,
+                        &mut game_state,
+                        &mut transforms,
+                        current_time,
+                    );
                 }
                 GameNetworkEvent::Disconnected(_) => {
                     info!("[CLIENT] : Disconnected from the server.");
@@ -94,6 +103,19 @@ fn handle_network(
             Ok(None) | Err(_) => break, // No more event to process, exit the loop and wait for the next frame
         }
     }
+
+    // Despawn of entities for players we haven't seen for a while:
+    // If an entity in the HashMap hasn't been seen for more than 0.8 seconds (any AOI received), it is despawned and removed from the HashMap
+    game_state
+        .spawned_players
+        .retain(|_id, (entity, last_seen)| {
+            if current_time - *last_seen > 0.8 {
+                commands.entity(*entity).despawn();
+                false
+            } else {
+                true
+            }
+        });
 }
 
 // This function handles the creation of new streams from the broker. It distinguishes between reliable and unreliable streams,
@@ -170,6 +192,7 @@ fn handle_server_message(
     commands: &mut Commands,
     game_state: &mut crate::game::GameState,
     transforms: &mut Query<&mut Transform>,
+    current_time: f64,
 ) {
     // Deserialize the broker message from the received bytes. If deserialization fails, log a warning and ignore the message.
     let Some(broker_message) = BrokerMessage::from_bytes(data) else {
@@ -187,7 +210,11 @@ fn handle_server_message(
                     }
                     ServerMessage::AOISnapshot { players } => {
                         crate::network::handle_aoi_snapshot(
-                            players, commands, game_state, transforms,
+                            players,
+                            commands,
+                            game_state,
+                            transforms,
+                            current_time,
                         );
                     }
                 }
@@ -206,14 +233,16 @@ fn handle_aoi_snapshot(
     commands: &mut Commands,
     game_state: &mut crate::game::GameState,
     transforms: &mut Query<&mut Transform>,
+    current_time: f64,
 ) {
     let mut current_frame_ids = Vec::new();
 
     for p in players {
         current_frame_ids.push(p.id);
 
-        if let Some(&entity) = game_state.spawned_players.get(&p.id) {
-            // existing player in AOI, update position
+        if let Some(&mut (entity, ref mut last_seen)) = game_state.spawned_players.get_mut(&p.id) {
+            // Existing player in AOI, update their position and last seen timestamp
+            *last_seen = current_time;
             if let Ok(mut transform) = transforms.get_mut(entity) {
                 transform.translation.x = p.x;
                 transform.translation.y = p.y;
@@ -258,18 +287,9 @@ fn handle_aoi_snapshot(
                 })
                 .id();
 
-            game_state.spawned_players.insert(p.id, entity);
+            game_state
+                .spawned_players
+                .insert(p.id, (entity, current_time));
         }
     }
-
-    // Despawn of entities that are no longer in the AOI :
-    // If an entity in the HashMap is not in the current frame's list of player IDs, it is despawned and removed from the HashMap
-    game_state.spawned_players.retain(|&id, &mut entity| {
-        if !current_frame_ids.contains(&id) {
-            commands.entity(entity).despawn();
-            false
-        } else {
-            true
-        }
-    });
 }
