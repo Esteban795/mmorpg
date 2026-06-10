@@ -337,6 +337,7 @@ impl SpatialService {
                         client_id, result.network_shard_id
                     );
                     self.send_subscribe(client_id, result.network_shard_id);
+                    self.client_crossing_state.insert(client_id, vec![result.network_shard_id]);
                 }
 
                 self.client_shards
