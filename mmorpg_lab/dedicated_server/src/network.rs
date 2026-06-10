@@ -34,16 +34,45 @@ pub struct NetworkManager {
     pub broker_connection: Option<GameConnection>,
     pub reliable_stream: Option<GameStream>,
     pub unreliable_stream: Option<GameStream>,
+    pub buffer: Vec<u8>,
+}
+
+#[derive(Resource, Default)]
+pub struct NetworkFrameCounter {
+    pub frame_count: u64,
+}
+
+#[derive(Resource, Default)]
+pub struct PositionUpdateCounter {
+    pub frame_count: u64, // Increments every frame, resets every 4 frames (5Hz at 20Hz tick rate)
+}
+
+#[derive(Resource, Default)]
+pub struct NetworkDiagnostics {
+    pub position_updates_attempted: u64,
+    pub position_updates_failed: u64,
+    pub aoi_broadcasts_sent: u64,
+    pub aoi_broadcasts_failed: u64,
 }
 
 pub struct NetworkPlugin;
 
 impl Plugin for NetworkPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<PlayerRegistry>().add_systems(
-            Update,
-            (poll_network_events, broadcast_aoi_and_positions).chain(),
-        );
+        app.init_resource::<PlayerRegistry>()
+            .init_resource::<NetworkFrameCounter>()
+            .init_resource::<PositionUpdateCounter>()
+            .init_resource::<NetworkDiagnostics>()
+            .add_systems(
+                Update,
+                (
+                    poll_network_events,
+                    broadcast_positions,
+                    broadcast_aoi,
+                    network_frame_diagnostic,
+                )
+                    .chain(),
+            );
     }
 }
 
@@ -87,7 +116,7 @@ fn poll_network_events(
                 if stream.is_reliable() {
                     info!("[NETWORK] Reliable stream to Broker is ready. Registering shard.");
 
-                    // Send Dummy message which contains the shard topic in ordre to register this connection to the shard topic
+                    // Send Dummy message which contains the shard topic in order to register this connection to the shard topic
                     if let Err(e) =
                         net.peer
                             .send(&_connection, &stream, Bytes::from(dummy_msg.to_bytes()))
@@ -137,11 +166,11 @@ fn poll_network_events(
             }
             // Receiving messages FROM THE BROKER
             GameNetworkEvent::Message { data, .. } => {
-                // First, unwrap the Broker protocol envelope
-                if let Some(broker_msg) = BrokerMessage::from_bytes(&data) {
+                net.buffer.extend_from_slice(&data);
+
+                // First, unwrap the Broker protocol envelope and parse all messages
+                for broker_msg in BrokerMessage::parse_multiple(&mut net.buffer) {
                     handle_broker_message(broker_msg, &mut registry, &mut net, &config);
-                } else {
-                    warn!("[NETWORK] Received malformed Broker message.");
                 }
             }
             _ => {}
@@ -186,7 +215,7 @@ fn handle_broker_message(
                             PlayerData {
                                 username: clean_username,
                                 position: Vec2::new(-250.0, -250.0),
-                                velocity: Vec2::new(-250.0, -250.0),
+                                velocity: Vec2::new(0.0, 0.0),
                                 state: EntityState::Owned,
                             },
                         );
@@ -429,36 +458,41 @@ fn send_inter_shard(
 }
 
 // -------------------------------------------------------------------------
-// AOI & Spatial Updates
+// Position Updates (5Hz) - For Spatial Server
 // -------------------------------------------------------------------------
-fn broadcast_aoi_and_positions(
+fn broadcast_positions(
     net: ResMut<NetworkManager>,
     registry: Res<PlayerRegistry>,
     config: Res<ServerConfig>,
+    mut pos_counter: ResMut<PositionUpdateCounter>,
+    mut diagnostics: ResMut<NetworkDiagnostics>,
 ) {
+    pos_counter.frame_count += 1;
+
+    // Only send PositionUpdates every 4 frames (20Hz / 4 = 5Hz)
+    if pos_counter.frame_count % 1 != 0 {
+        return;
+    }
+
     let Some(broker_conn) = &net.broker_connection else {
+        // debug!("[NETWORK] Cannot send positions: broker_connection is None");
         return;
     };
     let Some(unrel_stream) = &net.unreliable_stream else {
+        // debug!("[NETWORK] Cannot send positions: unreliable_stream is None");
         return;
     };
 
-    let mut all_players = Vec::new();
     let my_topic = string_to_topic(&config.zone);
+    let mut positions_sent = 0usize;
+    let mut positions_failed = 0usize;
 
-    // ============ Send Position Updates for the Spatial Server (Tag 0x10) and Ghost Updates (Tag 0x23) for all PendingHandoff shards ===========
+    // ============ Send Position Updates for the Spatial Server (5Hz) ===========
     for (client_id, player_data) in &registry.players {
         if player_data.state == EntityState::Ghost {
             // Don't send PositionUpdates for ghosts
             continue;
         }
-
-        all_players.push(PlayerState {
-            id: *client_id,
-            username: player_data.username.clone(),
-            x: player_data.position.x,
-            y: player_data.position.y,
-        });
 
         // Notify the Spatial Server of the exact coordinates
         let pos_update = BrokerMessage::PositionUpdate {
@@ -467,13 +501,23 @@ fn broadcast_aoi_and_positions(
             y: player_data.position.y,
         };
 
-        let _ = net.peer.send(
+        diagnostics.position_updates_attempted += 1;
+        if let Err(e) = net.peer.send(
             broker_conn,
             unrel_stream,
             Bytes::from(pos_update.to_bytes()),
-        );
+        ) {
+            error!(
+                "[NETWORK] Failed to send PositionUpdate for client {}: {:?}",
+                client_id, e
+            );
+            diagnostics.position_updates_failed += 1;
+            positions_failed += 1;
+        } else {
+            positions_sent += 1;
+        }
 
-        // --- Handoff Logics : Send GhostUpdates ---
+        // --- Handoff Logics : Send GhostUpdates (5Hz) ---
         if let EntityState::PendingHandoff { neighbor_topics } = &player_data.state {
             let ghost_update_payload = InterShardPayload::GhostUpdate {
                 entity_id: *client_id,
@@ -490,18 +534,64 @@ fn broadcast_aoi_and_positions(
                     topic_from: my_topic,
                     payload: ghost_update_payload.clone(),
                 };
-                let _ = net
-                    .peer
-                    .send(broker_conn, unrel_stream, Bytes::from(msg.to_bytes()));
+                if let Err(e) =
+                    net.peer
+                        .send(broker_conn, unrel_stream, Bytes::from(msg.to_bytes()))
+                {
+                    warn!("[NETWORK] Failed to send GhostUpdate to neighbor: {:?}", e);
+                }
             }
         }
+    }
+
+    if positions_sent > 0 || positions_failed > 0 {
+        info!(
+            "[NETWORK-5Hz] PositionUpdates: {} sent, {} failed (frame: {})",
+            positions_sent, positions_failed, pos_counter.frame_count
+        );
+    }
+}
+
+// -------------------------------------------------------------------------
+// AOI Broadcast (20Hz) - For Clients
+// -------------------------------------------------------------------------
+fn broadcast_aoi(
+    net: ResMut<NetworkManager>,
+    registry: Res<PlayerRegistry>,
+    config: Res<ServerConfig>,
+    mut diagnostics: ResMut<NetworkDiagnostics>,
+) {
+    let Some(broker_conn) = &net.broker_connection else {
+        // debug!("[NETWORK] Cannot broadcast AOI: broker_connection is None");
+        return;
+    };
+    let Some(unrel_stream) = &net.unreliable_stream else {
+        // debug!("[NETWORK] Cannot broadcast AOI: unreliable_stream is None");
+        return;
+    };
+
+    let mut all_players = Vec::new();
+
+    // ============ Collect all non-ghost players for AOI snapshot ===========
+    for (client_id, player_data) in &registry.players {
+        if player_data.state == EntityState::Ghost {
+            continue;
+        }
+
+        all_players.push(PlayerState {
+            id: *client_id,
+            username: player_data.username.clone(),
+            x: player_data.position.x,
+            y: player_data.position.y,
+        });
     }
 
     if all_players.is_empty() {
         return;
     }
 
-    // ============ Publish the Global AOI of this Shard (Tag 0x03) ===========
+    // ============ Publish the Global AOI of this Shard (20Hz) ===========
+    let player_count = all_players.len();
     let snapshot = ServerMessage::AOISnapshot {
         players: all_players,
     };
@@ -513,14 +603,35 @@ fn broadcast_aoi_and_positions(
                 payload,
             };
 
+            diagnostics.aoi_broadcasts_sent += 1;
             if let Err(e) = net.peer.send(
                 broker_conn,
                 unrel_stream,
                 Bytes::from(publish_msg.to_bytes()),
             ) {
-                warn!("Failed to publish AOI to Broker: {:?}", e);
+                warn!("[NETWORK] Failed to publish AOI to Broker: {:?}", e);
+                diagnostics.aoi_broadcasts_failed += 1;
+            } else {
+                info!(
+                    "[NETWORK-20Hz] AOI snapshot published: {} players",
+                    player_count
+                );
             }
         }
         Err(e) => error!("Failed to serialize AOI Snapshot: {:?}", e),
     }
+}
+
+// -------------------------------------------------------------------------
+// Frame Rate Diagnostic - logs every 100 frames to verify 20Hz operation
+// -------------------------------------------------------------------------
+fn network_frame_diagnostic(mut frame_counter: ResMut<NetworkFrameCounter>) {
+    frame_counter.frame_count += 1;
+    // Commented out to reduce console pollution - uncomment for debugging frame rates
+    // if frame_counter.frame_count % 20 == 0 {
+    //     debug!(
+    //         "[NETWORK] {} frames processed (20Hz = 1 frame every 50ms)",
+    //         frame_counter.frame_count
+    //     );
+    // }
 }

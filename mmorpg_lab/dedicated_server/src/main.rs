@@ -134,6 +134,7 @@ fn main() {
             broker_connection: None,
             reliable_stream: None,
             unreliable_stream: None,
+            buffer: Vec::new(),
         })
         .insert_resource(ShardId(shard_id))
         .run();

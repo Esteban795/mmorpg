@@ -1,0 +1,469 @@
+2026-06-10T18:04:35.098653Z  INFO orchestrator: Starting MMORPG Orchestrator...
+2026-06-10T18:04:35.101896Z  INFO orchestrator::spawner: Lazy Spawner started. Booting default lobby (shard:0)...
+2026-06-10T18:04:35.102006Z  INFO orchestrator::listener: Listener started on UDP 8000
+2026-06-10T18:04:35.102127Z  INFO orchestrator::spawner: Booting Bevy server on port 8001 in zone shard:0
+2026-06-10T18:04:35.102236Z  INFO orchestrator::spawner: Using profile 'debug' for dedicated server executable.
+2026-06-10T18:04:35.106232Z  INFO orchestrator::spawner: Dedicated server started successfully.
+2026-06-10T18:04:35.106457Z  INFO orchestrator::spawner: Default lobby (shard:0) launched. Awaiting split requests from Spatial Server...
+2026-06-10T18:04:35.116699Z  INFO dedicated_server: Starting dedicated server on port 8001...
+2026-06-10T18:04:35.116922Z  INFO dedicated_server: Orchestrator address: 127.0.0.1:8000
+2026-06-10T18:04:35.117075Z  INFO dedicated_server: Broker address: 127.0.0.1:10001
+2026-06-10T18:04:35.117167Z  INFO dedicated_server: Server zone: shard:0
+2026-06-10T18:04:35.117331Z  INFO dedicated_server: Max players: 2
+2026-06-10T18:04:35.118591Z  INFO dedicated_server: DEDICATED SERVER [shard:0]: Connecting to Broker at 127.0.0.1:10001...
+2026-06-10T18:04:35.124718Z  INFO dedicated_server::network: [NETWORK] Connected to Broker: 6b16a33a-8c8b-4539-bbac-d7495769ec34
+2026-06-10T18:04:35.124809Z  WARN dedicated_server::network: [NETWORK] Cannot broadcast AOI: unreliable_stream is None
+2026-06-10T18:04:35.174951Z  INFO dedicated_server::network: [NETWORK] Reliable stream to Broker is ready. Registering shard.
+2026-06-10T18:04:35.175191Z  INFO dedicated_server::network: [NETWORK] Successfully registered to topic: shard:0
+2026-06-10T18:04:35.175567Z  INFO dedicated_server::network: [NETWORK] Unreliable stream to Broker is ready. Waking it up.
+2026-06-10T18:04:35.175634Z  INFO dedicated_server::network: [NETWORK] Unreliable stream to Broker is awake.
+2026-06-10T18:04:36.691784Z  INFO orchestrator::quic_listener: New connection established: GameConnection { connection_id: fc712e9f-e14a-40b4-baa5-376a075c785e }
+2026-06-10T18:04:36.692017Z  INFO orchestrator::quic_listener: Reliable stream created for connection: Some(GameConnection { connection_id: fc712e9f-e14a-40b4-baa5-376a075c785e })
+2026-06-10T18:04:36.692245Z  INFO orchestrator::quic_listener: New stream created: GameStream { stream_id: 7 } for connection: GameConnection { connection_id: fc712e9f-e14a-40b4-baa5-376a075c785e }
+2026-06-10T18:04:36.692630Z  INFO orchestrator::quic_listener: New stream created: GameStream { stream_id: 7 } for connection: GameConnection { connection_id: fc712e9f-e14a-40b4-baa5-376a075c785e }
+2026-06-10T18:04:40.155847Z  INFO dedicated_server::heartbeat: Sending heartbeat...
+2026-06-10T18:04:40.155975Z  INFO dedicated_server::heartbeat: Heartbeat info: id : 0, IP=127.0.0.1, Port=8001, Zone=shard:0, Players=0/2
+2026-06-10T18:04:40.156229Z  INFO dedicated_server::heartbeat: Heartbeat sent (Players: 0/2)
+2026-06-10T18:04:40.158279Z  INFO orchestrator::listener: Heartbeat updated for server:0 (Status: available)
+2026-06-10T18:04:45.134172Z  INFO dedicated_server::heartbeat: Sending heartbeat...
+2026-06-10T18:04:45.134428Z  INFO dedicated_server::heartbeat: Heartbeat info: id : 0, IP=127.0.0.1, Port=8001, Zone=shard:0, Players=0/2
+2026-06-10T18:04:45.134628Z  INFO dedicated_server::heartbeat: Heartbeat sent (Players: 0/2)
+2026-06-10T18:04:45.136434Z  INFO orchestrator::listener: Heartbeat updated for server:0 (Status: available)
+2026-06-10T18:04:50.132333Z  INFO dedicated_server::heartbeat: Sending heartbeat...
+2026-06-10T18:04:50.132452Z  INFO dedicated_server::heartbeat: Heartbeat info: id : 0, IP=127.0.0.1, Port=8001, Zone=shard:0, Players=0/2
+2026-06-10T18:04:50.132612Z  INFO dedicated_server::heartbeat: Heartbeat sent (Players: 0/2)
+2026-06-10T18:04:50.134500Z  INFO orchestrator::listener: Heartbeat updated for server:0 (Status: available)
+2026-06-10T18:04:52.243052Z  INFO dedicated_server::network: [GAME] Player Stolgatt (ID: 3) joined the shard!
+2026-06-10T18:04:52.243178Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-250.00, -250.00)
+2026-06-10T18:04:52.243273Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-250.00, -250.00)
+2026-06-10T18:04:52.243372Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:52.293520Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:52.343735Z  INFO dedicated_server::network: [NETWORK-5Hz] PositionUpdates: 1 sent, 0 failed (frame: 340)
+2026-06-10T18:04:52.343930Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:52.393972Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:52.444227Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:52.494573Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:52.545049Z  INFO dedicated_server::network: [NETWORK-5Hz] PositionUpdates: 1 sent, 0 failed (frame: 344)
+2026-06-10T18:04:52.545177Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:52.595614Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:52.646005Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:52.696268Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:52.746427Z  INFO dedicated_server::network: [NETWORK-5Hz] PositionUpdates: 1 sent, 0 failed (frame: 348)
+2026-06-10T18:04:52.746570Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:52.796943Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:52.847300Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:52.897795Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:52.948099Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-250.00, -245.00)
+2026-06-10T18:04:52.948217Z  INFO dedicated_server::network: [NETWORK-5Hz] PositionUpdates: 1 sent, 0 failed (frame: 352)
+2026-06-10T18:04:52.948325Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:52.998423Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-250.00, -240.00)
+2026-06-10T18:04:52.998526Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-250.00, -235.00)
+2026-06-10T18:04:52.998595Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-250.00, -230.00)
+2026-06-10T18:04:52.998661Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-250.00, -225.00)
+2026-06-10T18:04:52.998750Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:53.048902Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-250.00, -220.00)
+2026-06-10T18:04:53.049004Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-250.00, -215.00)
+2026-06-10T18:04:53.049077Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-250.00, -210.00)
+2026-06-10T18:04:53.049165Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:53.099094Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-250.00, -205.00)
+2026-06-10T18:04:53.099198Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-250.00, -200.00)
+2026-06-10T18:04:53.099265Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-250.00, -195.00)
+2026-06-10T18:04:53.099347Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:53.149530Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-250.00, -190.00)
+2026-06-10T18:04:53.149637Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-250.00, -185.00)
+2026-06-10T18:04:53.149739Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-245.00, -180.00)
+2026-06-10T18:04:53.149837Z  INFO dedicated_server::network: [NETWORK-5Hz] PositionUpdates: 1 sent, 0 failed (frame: 356)
+2026-06-10T18:04:53.149937Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:53.199571Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-240.00, -175.00)
+2026-06-10T18:04:53.199683Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-235.00, -170.00)
+2026-06-10T18:04:53.199756Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-230.00, -165.00)
+2026-06-10T18:04:53.199813Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-225.00, -160.00)
+2026-06-10T18:04:53.199894Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:53.250119Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-220.00, -155.00)
+2026-06-10T18:04:53.250231Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-215.00, -150.00)
+2026-06-10T18:04:53.250317Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-210.00, -145.00)
+2026-06-10T18:04:53.250412Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:53.300334Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-205.00, -140.00)
+2026-06-10T18:04:53.300476Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-200.00, -135.00)
+2026-06-10T18:04:53.300550Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-195.00, -130.00)
+2026-06-10T18:04:53.300680Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:53.350620Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-190.00, -125.00)
+2026-06-10T18:04:53.350745Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-185.00, -120.00)
+2026-06-10T18:04:53.350918Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-180.00, -115.00)
+2026-06-10T18:04:53.351017Z  INFO dedicated_server::network: [NETWORK-5Hz] PositionUpdates: 1 sent, 0 failed (frame: 360)
+2026-06-10T18:04:53.351102Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:53.400951Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-175.00, -110.00)
+2026-06-10T18:04:53.401074Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-170.00, -105.00)
+2026-06-10T18:04:53.401140Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-165.00, -100.00)
+2026-06-10T18:04:53.401209Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:53.451275Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-160.00, -95.00)
+2026-06-10T18:04:53.451381Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-155.00, -90.00)
+2026-06-10T18:04:53.451450Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-150.00, -85.00)
+2026-06-10T18:04:53.451640Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:53.501620Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-145.00, -80.00)
+2026-06-10T18:04:53.501759Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-140.00, -75.00)
+2026-06-10T18:04:53.501883Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-135.00, -70.00)
+2026-06-10T18:04:53.502005Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:53.551938Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-130.00, -65.00)
+2026-06-10T18:04:53.552106Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-125.00, -60.00)
+2026-06-10T18:04:53.552237Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-120.00, -55.00)
+2026-06-10T18:04:53.552425Z  INFO dedicated_server::network: [NETWORK-5Hz] PositionUpdates: 1 sent, 0 failed (frame: 364)
+2026-06-10T18:04:53.552548Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:53.602665Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-115.00, -50.00)
+2026-06-10T18:04:53.602823Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-110.00, -45.00)
+2026-06-10T18:04:53.602890Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-105.00, -40.00)
+2026-06-10T18:04:53.602947Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-100.00, -35.00)
+2026-06-10T18:04:53.603030Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:53.653230Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-95.00, -30.00)
+2026-06-10T18:04:53.653363Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-90.00, -25.00)
+2026-06-10T18:04:53.653437Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-85.00, -20.00)
+2026-06-10T18:04:53.653533Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:53.703487Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-80.00, -15.00)
+2026-06-10T18:04:53.703594Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-75.00, -10.00)
+2026-06-10T18:04:53.703693Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-70.00, -5.00)
+2026-06-10T18:04:53.703785Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:53.753831Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-65.00, 0.00)
+2026-06-10T18:04:53.753949Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-60.00, 5.00)
+2026-06-10T18:04:53.754039Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-55.00, 10.00)
+2026-06-10T18:04:53.754125Z  INFO dedicated_server::network: [NETWORK-5Hz] PositionUpdates: 1 sent, 0 failed (frame: 368)
+2026-06-10T18:04:53.754204Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:53.804053Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-50.00, 15.00)
+2026-06-10T18:04:53.804161Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-45.00, 20.00)
+2026-06-10T18:04:53.804254Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:53.854260Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-40.00, 25.00)
+2026-06-10T18:04:53.854377Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-35.00, 30.00)
+2026-06-10T18:04:53.854482Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-30.00, 35.00)
+2026-06-10T18:04:53.854624Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:53.904364Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-25.00, 40.00)
+2026-06-10T18:04:53.904471Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-20.00, 45.00)
+2026-06-10T18:04:53.904543Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-15.00, 50.00)
+2026-06-10T18:04:53.904626Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:53.954716Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-10.00, 55.00)
+2026-06-10T18:04:53.954827Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-5.00, 60.00)
+2026-06-10T18:04:53.954925Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (0.00, 65.00)
+2026-06-10T18:04:53.955019Z  INFO dedicated_server::network: [NETWORK-5Hz] PositionUpdates: 1 sent, 0 failed (frame: 372)
+2026-06-10T18:04:53.955287Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:54.004783Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (5.00, 70.00)
+2026-06-10T18:04:54.004892Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (10.00, 75.00)
+2026-06-10T18:04:54.004963Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (15.00, 80.00)
+2026-06-10T18:04:54.005054Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:54.055192Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (20.00, 85.00)
+2026-06-10T18:04:54.055297Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (25.00, 90.00)
+2026-06-10T18:04:54.055369Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (30.00, 95.00)
+2026-06-10T18:04:54.055461Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:54.105514Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (35.00, 100.00)
+2026-06-10T18:04:54.105620Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (40.00, 105.00)
+2026-06-10T18:04:54.105688Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (45.00, 110.00)
+2026-06-10T18:04:54.105772Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:54.155970Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (50.00, 115.00)
+2026-06-10T18:04:54.156075Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (55.00, 120.00)
+2026-06-10T18:04:54.156146Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (60.00, 125.00)
+2026-06-10T18:04:54.156234Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (65.00, 130.00)
+2026-06-10T18:04:54.156301Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (70.00, 135.00)
+2026-06-10T18:04:54.156379Z  INFO dedicated_server::network: [NETWORK-5Hz] PositionUpdates: 1 sent, 0 failed (frame: 376)
+2026-06-10T18:04:54.156459Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:54.206457Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (75.00, 140.00)
+2026-06-10T18:04:54.206563Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (80.00, 145.00)
+2026-06-10T18:04:54.206637Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (85.00, 150.00)
+2026-06-10T18:04:54.206734Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:54.256528Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (90.00, 155.00)
+2026-06-10T18:04:54.256642Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (95.00, 160.00)
+2026-06-10T18:04:54.256733Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (95.00, 165.00)
+2026-06-10T18:04:54.256859Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:54.307056Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (95.00, 170.00)
+2026-06-10T18:04:54.307188Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (95.00, 175.00)
+2026-06-10T18:04:54.307271Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (95.00, 180.00)
+2026-06-10T18:04:54.307369Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:54.357449Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (95.00, 185.00)
+2026-06-10T18:04:54.357584Z  INFO dedicated_server::network: [NETWORK-5Hz] PositionUpdates: 1 sent, 0 failed (frame: 380)
+2026-06-10T18:04:54.357729Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:54.407916Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (90.00, 185.00)
+2026-06-10T18:04:54.408034Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (85.00, 185.00)
+2026-06-10T18:04:54.408102Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (80.00, 185.00)
+2026-06-10T18:04:54.408174Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (75.00, 185.00)
+2026-06-10T18:04:54.408289Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:54.457961Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (70.00, 185.00)
+2026-06-10T18:04:54.458081Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (65.00, 185.00)
+2026-06-10T18:04:54.458143Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (60.00, 185.00)
+2026-06-10T18:04:54.458249Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:54.508154Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (55.00, 185.00)
+2026-06-10T18:04:54.508262Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (50.00, 185.00)
+2026-06-10T18:04:54.508333Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (45.00, 185.00)
+2026-06-10T18:04:54.508427Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:54.558369Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (40.00, 185.00)
+2026-06-10T18:04:54.558477Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (35.00, 185.00)
+2026-06-10T18:04:54.558550Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (30.00, 185.00)
+2026-06-10T18:04:54.558638Z  INFO dedicated_server::network: [NETWORK-5Hz] PositionUpdates: 1 sent, 0 failed (frame: 384)
+2026-06-10T18:04:54.558729Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:54.608587Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (25.00, 185.00)
+2026-06-10T18:04:54.608695Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (20.00, 185.00)
+2026-06-10T18:04:54.608783Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (15.00, 185.00)
+2026-06-10T18:04:54.608881Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:54.659284Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (10.00, 185.00)
+2026-06-10T18:04:54.659496Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (5.00, 185.00)
+2026-06-10T18:04:54.659582Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (0.00, 185.00)
+2026-06-10T18:04:54.659679Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:54.709407Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-5.00, 185.00)
+2026-06-10T18:04:54.709522Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-10.00, 185.00)
+2026-06-10T18:04:54.709623Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-15.00, 185.00)
+2026-06-10T18:04:54.709722Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:54.759565Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-20.00, 185.00)
+2026-06-10T18:04:54.759687Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-25.00, 180.00)
+2026-06-10T18:04:54.759809Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-30.00, 175.00)
+2026-06-10T18:04:54.759904Z  INFO dedicated_server::network: [NETWORK-5Hz] PositionUpdates: 1 sent, 0 failed (frame: 388)
+2026-06-10T18:04:54.760020Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:54.809836Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-35.00, 170.00)
+2026-06-10T18:04:54.809988Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-40.00, 165.00)
+2026-06-10T18:04:54.810070Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-45.00, 160.00)
+2026-06-10T18:04:54.810261Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:54.860044Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-50.00, 155.00)
+2026-06-10T18:04:54.860210Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-55.00, 150.00)
+2026-06-10T18:04:54.860314Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-60.00, 145.00)
+2026-06-10T18:04:54.860421Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:54.910140Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-65.00, 140.00)
+2026-06-10T18:04:54.910268Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-70.00, 135.00)
+2026-06-10T18:04:54.910368Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:54.960379Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-75.00, 130.00)
+2026-06-10T18:04:54.960520Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-80.00, 125.00)
+2026-06-10T18:04:54.960641Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-85.00, 120.00)
+2026-06-10T18:04:54.960769Z  INFO dedicated_server::network: [NETWORK-5Hz] PositionUpdates: 1 sent, 0 failed (frame: 392)
+2026-06-10T18:04:54.960940Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:55.010725Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-90.00, 115.00)
+2026-06-10T18:04:55.010885Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-95.00, 110.00)
+2026-06-10T18:04:55.010974Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-100.00, 105.00)
+2026-06-10T18:04:55.011058Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:55.061079Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-105.00, 100.00)
+2026-06-10T18:04:55.061197Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-110.00, 95.00)
+2026-06-10T18:04:55.061269Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-115.00, 90.00)
+2026-06-10T18:04:55.061377Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:55.111543Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-120.00, 85.00)
+2026-06-10T18:04:55.111647Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-125.00, 80.00)
+2026-06-10T18:04:55.111719Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-130.00, 75.00)
+2026-06-10T18:04:55.111818Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:55.161906Z  INFO dedicated_server::heartbeat: Sending heartbeat...
+2026-06-10T18:04:55.162006Z  INFO dedicated_server::heartbeat: Heartbeat info: id : 0, IP=127.0.0.1, Port=8001, Zone=shard:0, Players=1/2
+2026-06-10T18:04:55.162125Z  INFO dedicated_server::heartbeat: Heartbeat sent (Players: 1/2)
+2026-06-10T18:04:55.162216Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-135.00, 70.00)
+2026-06-10T18:04:55.162321Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-140.00, 65.00)
+2026-06-10T18:04:55.162398Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-145.00, 60.00)
+2026-06-10T18:04:55.162526Z  INFO dedicated_server::network: [NETWORK-5Hz] PositionUpdates: 1 sent, 0 failed (frame: 396)
+2026-06-10T18:04:55.162625Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:55.163705Z  INFO orchestrator::listener: Heartbeat updated for server:0 (Status: available)
+2026-06-10T18:04:55.211998Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-150.00, 55.00)
+2026-06-10T18:04:55.212103Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-155.00, 50.00)
+2026-06-10T18:04:55.212170Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-160.00, 45.00)
+2026-06-10T18:04:55.212252Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:55.262388Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-165.00, 40.00)
+2026-06-10T18:04:55.262496Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-170.00, 35.00)
+2026-06-10T18:04:55.262562Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-175.00, 30.00)
+2026-06-10T18:04:55.262621Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-180.00, 25.00)
+2026-06-10T18:04:55.262713Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:55.312469Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-185.00, 20.00)
+2026-06-10T18:04:55.312585Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-190.00, 15.00)
+2026-06-10T18:04:55.312655Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-195.00, 10.00)
+2026-06-10T18:04:55.312737Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:55.362753Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-200.00, 5.00)
+2026-06-10T18:04:55.362858Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-205.00, 0.00)
+2026-06-10T18:04:55.362928Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-210.00, -5.00)
+2026-06-10T18:04:55.363009Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-215.00, -10.00)
+2026-06-10T18:04:55.363068Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-220.00, -15.00)
+2026-06-10T18:04:55.363145Z  INFO dedicated_server::network: [NETWORK-5Hz] PositionUpdates: 1 sent, 0 failed (frame: 400)
+2026-06-10T18:04:55.363229Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:55.413015Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-225.00, -20.00)
+2026-06-10T18:04:55.413125Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-230.00, -25.00)
+2026-06-10T18:04:55.413215Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-235.00, -30.00)
+2026-06-10T18:04:55.413296Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-240.00, -35.00)
+2026-06-10T18:04:55.413390Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:55.463525Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-245.00, -40.00)
+2026-06-10T18:04:55.463631Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-250.00, -45.00)
+2026-06-10T18:04:55.463729Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-255.00, -50.00)
+2026-06-10T18:04:55.463825Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:55.513998Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-260.00, -55.00)
+2026-06-10T18:04:55.514108Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-265.00, -60.00)
+2026-06-10T18:04:55.514203Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-270.00, -65.00)
+2026-06-10T18:04:55.514293Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:55.564434Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-270.00, -70.00)
+2026-06-10T18:04:55.564542Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-270.00, -75.00)
+2026-06-10T18:04:55.564637Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-270.00, -80.00)
+2026-06-10T18:04:55.564725Z  INFO dedicated_server::network: [NETWORK-5Hz] PositionUpdates: 1 sent, 0 failed (frame: 404)
+2026-06-10T18:04:55.564822Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:55.614524Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-270.00, -85.00)
+2026-06-10T18:04:55.614632Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-270.00, -90.00)
+2026-06-10T18:04:55.614701Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-270.00, -95.00)
+2026-06-10T18:04:55.614770Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-270.00, -100.00)
+2026-06-10T18:04:55.614853Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:55.664637Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-270.00, -105.00)
+2026-06-10T18:04:55.664742Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-270.00, -110.00)
+2026-06-10T18:04:55.664815Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-270.00, -115.00)
+2026-06-10T18:04:55.664917Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:55.714765Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-270.00, -120.00)
+2026-06-10T18:04:55.714874Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-270.00, -125.00)
+2026-06-10T18:04:55.714943Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-265.00, -130.00)
+2026-06-10T18:04:55.715026Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:55.765183Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-260.00, -135.00)
+2026-06-10T18:04:55.765291Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-255.00, -140.00)
+2026-06-10T18:04:55.765362Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-250.00, -145.00)
+2026-06-10T18:04:55.765445Z  INFO dedicated_server::network: [NETWORK-5Hz] PositionUpdates: 1 sent, 0 failed (frame: 408)
+2026-06-10T18:04:55.765530Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:55.815497Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-245.00, -150.00)
+2026-06-10T18:04:55.815603Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-240.00, -155.00)
+2026-06-10T18:04:55.815673Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-235.00, -160.00)
+2026-06-10T18:04:55.815764Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:55.865829Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-230.00, -165.00)
+2026-06-10T18:04:55.865942Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-225.00, -170.00)
+2026-06-10T18:04:55.866104Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-220.00, -175.00)
+2026-06-10T18:04:55.866187Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:55.916357Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-215.00, -180.00)
+2026-06-10T18:04:55.916478Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-210.00, -185.00)
+2026-06-10T18:04:55.916575Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-205.00, -190.00)
+2026-06-10T18:04:55.916664Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:55.966404Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-200.00, -195.00)
+2026-06-10T18:04:55.966522Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-195.00, -200.00)
+2026-06-10T18:04:55.966623Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-190.00, -205.00)
+2026-06-10T18:04:55.966761Z  INFO dedicated_server::network: [NETWORK-5Hz] PositionUpdates: 1 sent, 0 failed (frame: 412)
+2026-06-10T18:04:55.966885Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:56.016569Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-185.00, -210.00)
+2026-06-10T18:04:56.016692Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-180.00, -215.00)
+2026-06-10T18:04:56.016760Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-175.00, -220.00)
+2026-06-10T18:04:56.016843Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:56.066882Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-170.00, -225.00)
+2026-06-10T18:04:56.066991Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-165.00, -230.00)
+2026-06-10T18:04:56.067118Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:56.117258Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-160.00, -235.00)
+2026-06-10T18:04:56.117408Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-155.00, -240.00)
+2026-06-10T18:04:56.117514Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-150.00, -245.00)
+2026-06-10T18:04:56.117633Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:56.167534Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-145.00, -250.00)
+2026-06-10T18:04:56.167652Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-140.00, -255.00)
+2026-06-10T18:04:56.167745Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-135.00, -260.00)
+2026-06-10T18:04:56.167846Z  INFO dedicated_server::network: [NETWORK-5Hz] PositionUpdates: 1 sent, 0 failed (frame: 416)
+2026-06-10T18:04:56.167923Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:56.217963Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-130.00, -265.00)
+2026-06-10T18:04:56.218089Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-125.00, -270.00)
+2026-06-10T18:04:56.218245Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-120.00, -275.00)
+2026-06-10T18:04:56.218327Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-115.00, -280.00)
+2026-06-10T18:04:56.218472Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:56.268091Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-110.00, -285.00)
+2026-06-10T18:04:56.268201Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-105.00, -290.00)
+2026-06-10T18:04:56.268320Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-100.00, -295.00)
+2026-06-10T18:04:56.268439Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:56.318432Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-95.00, -300.00)
+2026-06-10T18:04:56.318564Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-90.00, -305.00)
+2026-06-10T18:04:56.318652Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-85.00, -310.00)
+2026-06-10T18:04:56.318749Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:56.368686Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-80.00, -315.00)
+2026-06-10T18:04:56.368820Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-75.00, -320.00)
+2026-06-10T18:04:56.368938Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-70.00, -325.00)
+2026-06-10T18:04:56.369029Z  INFO dedicated_server::network: [NETWORK-5Hz] PositionUpdates: 1 sent, 0 failed (frame: 420)
+2026-06-10T18:04:56.369113Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:56.419152Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-65.00, -330.00)
+2026-06-10T18:04:56.419357Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-60.00, -335.00)
+2026-06-10T18:04:56.419426Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-55.00, -340.00)
+2026-06-10T18:04:56.419598Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:56.469352Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-50.00, -345.00)
+2026-06-10T18:04:56.469459Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-45.00, -350.00)
+2026-06-10T18:04:56.469530Z  INFO dedicated_server::network: [GAME] Received input from player Stolgatt (ID: 3). New position: (-40.00, -355.00)
+2026-06-10T18:04:56.469641Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:56.519846Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:56.570137Z  INFO dedicated_server::network: [NETWORK-5Hz] PositionUpdates: 1 sent, 0 failed (frame: 424)
+2026-06-10T18:04:56.570252Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:56.620155Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:56.670683Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:56.720830Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:56.770917Z  INFO dedicated_server::network: [NETWORK-5Hz] PositionUpdates: 1 sent, 0 failed (frame: 428)
+2026-06-10T18:04:56.771048Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:56.821198Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:56.871344Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:56.921526Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:56.971761Z  INFO dedicated_server::network: [NETWORK-5Hz] PositionUpdates: 1 sent, 0 failed (frame: 432)
+2026-06-10T18:04:56.971893Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:57.021955Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:57.072220Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:57.122622Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:57.172813Z  INFO dedicated_server::network: [NETWORK-5Hz] PositionUpdates: 1 sent, 0 failed (frame: 436)
+2026-06-10T18:04:57.172935Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:57.223271Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:57.273474Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:57.323744Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:57.374164Z  INFO dedicated_server::network: [NETWORK-5Hz] PositionUpdates: 1 sent, 0 failed (frame: 440)
+2026-06-10T18:04:57.374332Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:57.424457Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:57.474684Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:57.524888Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:57.575126Z  INFO dedicated_server::network: [NETWORK-5Hz] PositionUpdates: 1 sent, 0 failed (frame: 444)
+2026-06-10T18:04:57.575270Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:57.625285Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:57.675581Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:57.725707Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:57.775913Z  INFO dedicated_server::network: [NETWORK-5Hz] PositionUpdates: 1 sent, 0 failed (frame: 448)
+2026-06-10T18:04:57.776058Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:57.826414Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:57.876442Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:57.927035Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:57.977184Z  INFO dedicated_server::network: [NETWORK-5Hz] PositionUpdates: 1 sent, 0 failed (frame: 452)
+2026-06-10T18:04:57.977320Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:58.027489Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:58.077862Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:58.128078Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:58.178262Z  INFO dedicated_server::network: [NETWORK-5Hz] PositionUpdates: 1 sent, 0 failed (frame: 456)
+2026-06-10T18:04:58.178381Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:58.228654Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:58.279100Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:58.329550Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:58.379853Z  INFO dedicated_server::network: [NETWORK-5Hz] PositionUpdates: 1 sent, 0 failed (frame: 460)
+2026-06-10T18:04:58.380188Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:58.430228Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:58.480602Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:58.530738Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:58.580986Z  INFO dedicated_server::network: [NETWORK-5Hz] PositionUpdates: 1 sent, 0 failed (frame: 464)
+2026-06-10T18:04:58.581189Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:58.631185Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:58.681652Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:58.731579Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:58.781819Z  INFO dedicated_server::network: [NETWORK-5Hz] PositionUpdates: 1 sent, 0 failed (frame: 468)
+2026-06-10T18:04:58.781926Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:58.831805Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:58.882250Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:58.932345Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:58.982848Z  INFO dedicated_server::network: [NETWORK-5Hz] PositionUpdates: 1 sent, 0 failed (frame: 472)
+2026-06-10T18:04:58.983010Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:59.033543Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:59.083651Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:59.134077Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:59.184423Z  INFO dedicated_server::network: [NETWORK-5Hz] PositionUpdates: 1 sent, 0 failed (frame: 476)
+2026-06-10T18:04:59.184537Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:59.234532Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:59.284803Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:59.335206Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:59.385672Z  INFO dedicated_server::network: [NETWORK-5Hz] PositionUpdates: 1 sent, 0 failed (frame: 480)
+2026-06-10T18:04:59.385793Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:59.436144Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:59.486576Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:59.536664Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:59.586754Z  INFO dedicated_server::network: [NETWORK-5Hz] PositionUpdates: 1 sent, 0 failed (frame: 484)
+2026-06-10T18:04:59.586880Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:59.637266Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:59.687922Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:59.737870Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:59.788280Z  INFO dedicated_server::network: [NETWORK-5Hz] PositionUpdates: 1 sent, 0 failed (frame: 488)
+2026-06-10T18:04:59.788425Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:59.838356Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:59.888483Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:59.938738Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:04:59.989011Z  INFO dedicated_server::network: [NETWORK-5Hz] PositionUpdates: 1 sent, 0 failed (frame: 492)
+2026-06-10T18:04:59.989134Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:05:00.039143Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:05:00.089308Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:05:00.139721Z  INFO dedicated_server::heartbeat: Sending heartbeat...
+2026-06-10T18:05:00.139825Z  INFO dedicated_server::heartbeat: Heartbeat info: id : 0, IP=127.0.0.1, Port=8001, Zone=shard:0, Players=1/2
+2026-06-10T18:05:00.139982Z  INFO dedicated_server::heartbeat: Heartbeat sent (Players: 1/2)
+2026-06-10T18:05:00.140096Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:05:00.141780Z  INFO orchestrator::listener: Heartbeat updated for server:0 (Status: available)
+2026-06-10T18:05:00.190170Z  INFO dedicated_server::network: [NETWORK-5Hz] PositionUpdates: 1 sent, 0 failed (frame: 496)
+2026-06-10T18:05:00.190394Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:05:00.240256Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:05:00.290667Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:05:00.341392Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:05:00.391438Z  INFO dedicated_server::network: [NETWORK-5Hz] PositionUpdates: 1 sent, 0 failed (frame: 500)
+2026-06-10T18:05:00.391960Z  INFO dedicated_server::network: [NETWORK-20Hz] AOI snapshot published: 1 players
+2026-06-10T18:05:00.441493Z  INFO d

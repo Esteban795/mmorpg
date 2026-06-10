@@ -310,6 +310,72 @@ impl BrokerMessage {
             _ => None, // Unknown tag
         }
     }
+
+    // Utility function to parse multiple concatenated messages from a single byte stream, returning a vector of BrokerMessage
+    pub fn parse_multiple(buffer: &mut Vec<u8>) -> Vec<BrokerMessage> {
+        let mut messages = Vec::new();
+        let mut offset = 0;
+
+        while offset < buffer.len() {
+            let tag = buffer[offset];
+            let mut msg_len = 1; // Start with 1 byte for the tag
+
+            // Computes the total length of the message based on its tag and the expected format
+            match tag {
+                TAG_SUBSCRIBE | TAG_UNSUBSCRIBE => msg_len += 36,
+                TAG_PUBLISH => {
+                    if buffer.len() - offset < 35 {
+                        break;
+                    }
+                    let payload_len =
+                        u16::from_le_bytes([buffer[offset + 33], buffer[offset + 34]]) as usize;
+                    msg_len += 34 + payload_len;
+                }
+                TAG_BROADCAST => {
+                    if buffer.len() - offset < 3 {
+                        break;
+                    }
+                    let payload_len =
+                        u16::from_le_bytes([buffer[offset + 1], buffer[offset + 2]]) as usize;
+                    msg_len += 2 + payload_len;
+                }
+                TAG_CLIENT_INPUT => msg_len += 20,
+                TAG_POSITION_UPDATE => msg_len += 12,
+                TAG_CROSSING_ALERT | TAG_AUTHORITY_SWITCH | TAG_CROSSING_EXIT => msg_len += 68,
+                TAG_INTER_SHARD_MESSAGE => {
+                    if buffer.len() - offset < 67 {
+                        break;
+                    }
+                    let payload_len =
+                        u16::from_le_bytes([buffer[offset + 65], buffer[offset + 66]]) as usize;
+                    msg_len += 66 + payload_len;
+                }
+                TAG_SHARD_READY => msg_len += 4, // TAG_SHARD_READY
+                _ => {
+                    buffer.clear();
+                    return messages;
+                } // Unknown tag, clear corrupted buffer and stop parsing
+            }
+
+            if buffer.len() - offset < msg_len {
+                break;
+            } // Incomplete message, wait for more data
+
+            // Parse the message and add it to the vector
+            if let Some(msg) = BrokerMessage::from_bytes(&buffer[offset..offset + msg_len]) {
+                messages.push(msg);
+            }
+
+            // Move to the next message in the stream
+            offset += msg_len;
+        }
+        if offset > 0 {
+            buffer.drain(..offset);
+            //tracing::warn!( "Parsed {} messages from buffer, {} bytes remaining", messages.len(), buffer.len());
+        } // Remove parsed messages from the buffer
+
+        messages
+    }
 }
 
 // Internal Inter-Shard communication payloads (not directly sent by clients, but used by shards to exchange entity state during handoff)

@@ -1,0 +1,94 @@
+2026-06-10T18:04:36.687826Z  INFO spatialserver: Starting MMORPG spatial server...
+2026-06-10T18:04:36.691509Z  INFO spatialserver::spatialservice:  Connected to broker : 648e4538-e029-4b53-bfad-ebc6cf6ebde9
+2026-06-10T18:04:36.691832Z  INFO spatialserver::spatialservice: Reliable stream created for broker
+2026-06-10T18:04:36.691948Z  INFO spatialserver::spatialservice: Unreliable stream created for broker
+2026-06-10T18:04:36.692158Z  INFO spatialserver::spatialservice:  Stream created for broker 648e4538-e029-4b53-bfad-ebc6cf6ebde9, reliable: true
+2026-06-10T18:04:36.692298Z  INFO spatialserver::spatialservice:  Stream created for broker 648e4538-e029-4b53-bfad-ebc6cf6ebde9, reliable: false
+2026-06-10T18:04:36.692388Z  INFO spatialserver::spatialservice:  Orchestrator connected : 8368fdc1-22e6-4f68-a98e-dcd7d3b775b1
+2026-06-10T18:04:36.692481Z  INFO spatialserver::spatialservice:  Stream created for orchestrator 8368fdc1-22e6-4f68-a98e-dcd7d3b775b1, reliable: true, stream_id: 7
+2026-06-10T18:04:36.692562Z  INFO spatialserver::spatialservice:  Stream created for orchestrator 8368fdc1-22e6-4f68-a98e-dcd7d3b775b1, reliable: true, stream_id: 7
+2026-06-10T18:04:36.692624Z  INFO spatialserver::spatialservice:  Stream created for orchestrator 8368fdc1-22e6-4f68-a98e-dcd7d3b775b1, reliable: false, stream_id: 8
+2026-06-10T18:04:52.357372Z  INFO spatialserver::spatialservice:  Message received from broker 648e4538-e029-4b53-bfad-ebc6cf6ebde9 on stream GameStream { stream_id: 8 }: 13 bytes
+2026-06-10T18:04:52.357525Z  INFO spatialserver::spatialservice: Received PositionUpdate from broker for client 3: x=-250, y=-250
+2026-06-10T18:04:52.357629Z  INFO spatialserver::spatialservice: New player 3 inserted in shard 0, subscribing to it
+2026-06-10T18:04:52.357711Z  INFO spatialserver::spatialservice: Subscribe client_id=3 topic="shard:0"
+2026-06-10T18:04:52.561241Z  INFO spatialserver::spatialservice:  Message received from broker 648e4538-e029-4b53-bfad-ebc6cf6ebde9 on stream GameStream { stream_id: 8 }: 13 bytes
+2026-06-10T18:04:52.561396Z  INFO spatialserver::spatialservice: Received PositionUpdate from broker for client 3: x=-250, y=-250
+2026-06-10T18:04:52.748429Z  INFO spatialserver::spatialservice:  Message received from broker 648e4538-e029-4b53-bfad-ebc6cf6ebde9 on stream GameStream { stream_id: 8 }: 13 bytes
+2026-06-10T18:04:52.748545Z  INFO spatialserver::spatialservice: Received PositionUpdate from broker for client 3: x=-250, y=-250
+2026-06-10T18:04:52.953173Z  INFO spatialserver::spatialservice:  Message received from broker 648e4538-e029-4b53-bfad-ebc6cf6ebde9 on stream GameStream { stream_id: 8 }: 13 bytes
+2026-06-10T18:04:52.953315Z  INFO spatialserver::spatialservice: Received PositionUpdate from broker for client 3: x=-250, y=-245
+2026-06-10T18:04:53.158494Z  INFO spatialserver::spatialservice:  Message received from broker 648e4538-e029-4b53-bfad-ebc6cf6ebde9 on stream GameStream { stream_id: 8 }: 13 bytes
+2026-06-10T18:04:53.158639Z  INFO spatialserver::spatialservice: Received PositionUpdate from broker for client 3: x=-245, y=-180
+2026-06-10T18:04:53.362197Z  INFO spatialserver::spatialservice:  Message received from broker 648e4538-e029-4b53-bfad-ebc6cf6ebde9 on stream GameStream { stream_id: 8 }: 13 bytes
+2026-06-10T18:04:53.362349Z  INFO spatialserver::spatialservice: Received PositionUpdate from broker for client 3: x=-180, y=-115
+2026-06-10T18:04:53.566029Z  INFO spatialserver::spatialservice:  Message received from broker 648e4538-e029-4b53-bfad-ebc6cf6ebde9 on stream GameStream { stream_id: 8 }: 13 bytes
+2026-06-10T18:04:53.566273Z  INFO spatialserver::spatialservice: Received PositionUpdate from broker for client 3: x=-120, y=-55
+2026-06-10T18:04:53.770871Z  INFO spatialserver::spatialservice:  Message received from broker 648e4538-e029-4b53-bfad-ebc6cf6ebde9 on stream GameStream { stream_id: 8 }: 13 bytes
+2026-06-10T18:04:53.771007Z  INFO spatialserver::spatialservice: Received PositionUpdate from broker for client 3: x=-55, y=10
+2026-06-10T18:04:53.958323Z  INFO spatialserver::spatialservice:  Message received from broker 648e4538-e029-4b53-bfad-ebc6cf6ebde9 on stream GameStream { stream_id: 8 }: 13 bytes
+2026-06-10T18:04:53.958454Z  INFO spatialserver::spatialservice: Received PositionUpdate from broker for client 3: x=0, y=65
+2026-06-10T18:04:54.162150Z  INFO spatialserver::spatialservice:  Message received from broker 648e4538-e029-4b53-bfad-ebc6cf6ebde9 on stream GameStream { stream_id: 8 }: 13 bytes
+2026-06-10T18:04:54.162262Z  INFO spatialserver::spatialservice: Received PositionUpdate from broker for client 3: x=70, y=135
+2026-06-10T18:04:54.366146Z  INFO spatialserver::spatialservice:  Message received from broker 648e4538-e029-4b53-bfad-ebc6cf6ebde9 on stream GameStream { stream_id: 8 }: 13 bytes
+2026-06-10T18:04:54.366419Z  INFO spatialserver::spatialservice: Received PositionUpdate from broker for client 3: x=95, y=185
+2026-06-10T18:04:54.570788Z  INFO spatialserver::spatialservice:  Message received from broker 648e4538-e029-4b53-bfad-ebc6cf6ebde9 on stream GameStream { stream_id: 8 }: 13 bytes
+2026-06-10T18:04:54.570915Z  INFO spatialserver::spatialservice: Received PositionUpdate from broker for client 3: x=30, y=185
+2026-06-10T18:04:54.775114Z  INFO spatialserver::spatialservice:  Message received from broker 648e4538-e029-4b53-bfad-ebc6cf6ebde9 on stream GameStream { stream_id: 8 }: 13 bytes
+2026-06-10T18:04:54.775243Z  INFO spatialserver::spatialservice: Received PositionUpdate from broker for client 3: x=-30, y=175
+2026-06-10T18:04:54.961384Z  INFO spatialserver::spatialservice:  Message received from broker 648e4538-e029-4b53-bfad-ebc6cf6ebde9 on stream GameStream { stream_id: 8 }: 13 bytes
+2026-06-10T18:04:54.961485Z  INFO spatialserver::spatialservice: Received PositionUpdate from broker for client 3: x=-85, y=120
+2026-06-10T18:04:55.166374Z  INFO spatialserver::spatialservice:  Message received from broker 648e4538-e029-4b53-bfad-ebc6cf6ebde9 on stream GameStream { stream_id: 8 }: 13 bytes
+2026-06-10T18:04:55.166520Z  INFO spatialserver::spatialservice: Received PositionUpdate from broker for client 3: x=-145, y=60
+2026-06-10T18:04:55.370721Z  INFO spatialserver::spatialservice:  Message received from broker 648e4538-e029-4b53-bfad-ebc6cf6ebde9 on stream GameStream { stream_id: 8 }: 13 bytes
+2026-06-10T18:04:55.370853Z  INFO spatialserver::spatialservice: Received PositionUpdate from broker for client 3: x=-220, y=-15
+2026-06-10T18:04:55.574503Z  INFO spatialserver::spatialservice:  Message received from broker 648e4538-e029-4b53-bfad-ebc6cf6ebde9 on stream GameStream { stream_id: 8 }: 13 bytes
+2026-06-10T18:04:55.574727Z  INFO spatialserver::spatialservice: Received PositionUpdate from broker for client 3: x=-270, y=-80
+2026-06-10T18:04:55.777887Z  INFO spatialserver::spatialservice:  Message received from broker 648e4538-e029-4b53-bfad-ebc6cf6ebde9 on stream GameStream { stream_id: 8 }: 13 bytes
+2026-06-10T18:04:55.778032Z  INFO spatialserver::spatialservice: Received PositionUpdate from broker for client 3: x=-250, y=-145
+2026-06-10T18:04:55.982577Z  INFO spatialserver::spatialservice:  Message received from broker 648e4538-e029-4b53-bfad-ebc6cf6ebde9 on stream GameStream { stream_id: 8 }: 13 bytes
+2026-06-10T18:04:55.982825Z  INFO spatialserver::spatialservice: Received PositionUpdate from broker for client 3: x=-190, y=-205
+2026-06-10T18:04:56.170637Z  INFO spatialserver::spatialservice:  Message received from broker 648e4538-e029-4b53-bfad-ebc6cf6ebde9 on stream GameStream { stream_id: 8 }: 13 bytes
+2026-06-10T18:04:56.170775Z  INFO spatialserver::spatialservice: Received PositionUpdate from broker for client 3: x=-135, y=-260
+2026-06-10T18:04:56.374766Z  INFO spatialserver::spatialservice:  Message received from broker 648e4538-e029-4b53-bfad-ebc6cf6ebde9 on stream GameStream { stream_id: 8 }: 13 bytes
+2026-06-10T18:04:56.374894Z  INFO spatialserver::spatialservice: Received PositionUpdate from broker for client 3: x=-70, y=-325
+2026-06-10T18:04:56.579902Z  INFO spatialserver::spatialservice:  Message received from broker 648e4538-e029-4b53-bfad-ebc6cf6ebde9 on stream GameStream { stream_id: 8 }: 13 bytes
+2026-06-10T18:04:56.580040Z  INFO spatialserver::spatialservice: Received PositionUpdate from broker for client 3: x=-40, y=-355
+2026-06-10T18:04:56.783988Z  INFO spatialserver::spatialservice:  Message received from broker 648e4538-e029-4b53-bfad-ebc6cf6ebde9 on stream GameStream { stream_id: 8 }: 13 bytes
+2026-06-10T18:04:56.784232Z  INFO spatialserver::spatialservice: Received PositionUpdate from broker for client 3: x=-40, y=-355
+2026-06-10T18:04:56.987395Z  INFO spatialserver::spatialservice:  Message received from broker 648e4538-e029-4b53-bfad-ebc6cf6ebde9 on stream GameStream { stream_id: 8 }: 13 bytes
+2026-06-10T18:04:56.987584Z  INFO spatialserver::spatialservice: Received PositionUpdate from broker for client 3: x=-40, y=-355
+2026-06-10T18:04:57.174913Z  INFO spatialserver::spatialservice:  Message received from broker 648e4538-e029-4b53-bfad-ebc6cf6ebde9 on stream GameStream { stream_id: 8 }: 13 bytes
+2026-06-10T18:04:57.175097Z  INFO spatialserver::spatialservice: Received PositionUpdate from broker for client 3: x=-40, y=-355
+2026-06-10T18:04:57.379319Z  INFO spatialserver::spatialservice:  Message received from broker 648e4538-e029-4b53-bfad-ebc6cf6ebde9 on stream GameStream { stream_id: 8 }: 13 bytes
+2026-06-10T18:04:57.379456Z  INFO spatialserver::spatialservice: Received PositionUpdate from broker for client 3: x=-40, y=-355
+2026-06-10T18:04:57.582561Z  INFO spatialserver::spatialservice:  Message received from broker 648e4538-e029-4b53-bfad-ebc6cf6ebde9 on stream GameStream { stream_id: 8 }: 13 bytes
+2026-06-10T18:04:57.582692Z  INFO spatialserver::spatialservice: Received PositionUpdate from broker for client 3: x=-40, y=-355
+2026-06-10T18:04:57.785032Z  INFO spatialserver::spatialservice:  Message received from broker 648e4538-e029-4b53-bfad-ebc6cf6ebde9 on stream GameStream { stream_id: 8 }: 13 bytes
+2026-06-10T18:04:57.785155Z  INFO spatialserver::spatialservice: Received PositionUpdate from broker for client 3: x=-40, y=-355
+2026-06-10T18:04:57.989222Z  INFO spatialserver::spatialservice:  Message received from broker 648e4538-e029-4b53-bfad-ebc6cf6ebde9 on stream GameStream { stream_id: 8 }: 13 bytes
+2026-06-10T18:04:57.989343Z  INFO spatialserver::spatialservice: Received PositionUpdate from broker for client 3: x=-40, y=-355
+2026-06-10T18:04:58.193426Z  INFO spatialserver::spatialservice:  Message received from broker 648e4538-e029-4b53-bfad-ebc6cf6ebde9 on stream GameStream { stream_id: 8 }: 13 bytes
+2026-06-10T18:04:58.193559Z  INFO spatialserver::spatialservice: Received PositionUpdate from broker for client 3: x=-40, y=-355
+2026-06-10T18:04:58.380826Z  INFO spatialserver::spatialservice:  Message received from broker 648e4538-e029-4b53-bfad-ebc6cf6ebde9 on stream GameStream { stream_id: 8 }: 13 bytes
+2026-06-10T18:04:58.380986Z  INFO spatialserver::spatialservice: Received PositionUpdate from broker for client 3: x=-40, y=-355
+2026-06-10T18:04:58.585060Z  INFO spatialserver::spatialservice:  Message received from broker 648e4538-e029-4b53-bfad-ebc6cf6ebde9 on stream GameStream { stream_id: 8 }: 13 bytes
+2026-06-10T18:04:58.585160Z  INFO spatialserver::spatialservice: Received PositionUpdate from broker for client 3: x=-40, y=-355
+2026-06-10T18:04:58.788310Z  INFO spatialserver::spatialservice:  Message received from broker 648e4538-e029-4b53-bfad-ebc6cf6ebde9 on stream GameStream { stream_id: 8 }: 13 bytes
+2026-06-10T18:04:58.788423Z  INFO spatialserver::spatialservice: Received PositionUpdate from broker for client 3: x=-40, y=-355
+2026-06-10T18:04:58.992247Z  INFO spatialserver::spatialservice:  Message received from broker 648e4538-e029-4b53-bfad-ebc6cf6ebde9 on stream GameStream { stream_id: 8 }: 13 bytes
+2026-06-10T18:04:58.992471Z  INFO spatialserver::spatialservice: Received PositionUpdate from broker for client 3: x=-40, y=-355
+2026-06-10T18:04:59.195942Z  INFO spatialserver::spatialservice:  Message received from broker 648e4538-e029-4b53-bfad-ebc6cf6ebde9 on stream GameStream { stream_id: 8 }: 13 bytes
+2026-06-10T18:04:59.196061Z  INFO spatialserver::spatialservice: Received PositionUpdate from broker for client 3: x=-40, y=-355
+2026-06-10T18:04:59.399055Z  INFO spatialserver::spatialservice:  Message received from broker 648e4538-e029-4b53-bfad-ebc6cf6ebde9 on stream GameStream { stream_id: 8 }: 13 bytes
+2026-06-10T18:04:59.399157Z  INFO spatialserver::spatialservice: Received PositionUpdate from broker for client 3: x=-40, y=-355
+2026-06-10T18:04:59.603442Z  INFO spatialserver::spatialservice:  Message received from broker 648e4538-e029-4b53-bfad-ebc6cf6ebde9 on stream GameStream { stream_id: 8 }: 13 bytes
+2026-06-10T18:04:59.603565Z  INFO spatialserver::spatialservice: Received PositionUpdate from broker for client 3: x=-40, y=-355
+2026-06-10T18:04:59.791076Z  INFO spatialserver::spatialservice:  Message received from broker 648e4538-e029-4b53-bfad-ebc6cf6ebde9 on stream GameStream { stream_id: 8 }: 13 bytes
+2026-06-10T18:04:59.791207Z  INFO spatialserver::spatialservice: Received PositionUpdate from broker for client 3: x=-40, y=-355
+2026-06-10T18:04:59.993730Z  INFO spatialserver::spatialservice:  Message received from broker 648e4538-e029-4b53-bfad-ebc6cf6ebde9 on stream GameStream { stream_id: 8 }: 13 bytes
+2026-06-10T18:04:59.993840Z  INFO spatialserver::spatialservice: Received PositionUpdate from broker for client 3: x=-40, y=-355
+2026-06-10T18:05:00.197420Z  INFO spatialserver::spatialservice:  Message received from broker 648e4538-e029-4b53-bfad-ebc6cf6ebde9 on stream GameStream { stream_id: 8 }: 13 bytes
+2026-06-10T18:05:00.197696Z  INFO spatialserver::spatialservice: Received PositionUpdate from broker for client 3: x=-40, y=-355
+2026-06-10T18:05:10.915894Z  INFO spatialserver::spatialservice:  Orchestrator disconnected: 8368fdc1-22e6-4f68-a98e-dcd7d3b775b1
+2026-06-10T18:05:10.916136Z ERROR spatialserver::spatialservice:  Disconnected from orchestrator, shutting down service.

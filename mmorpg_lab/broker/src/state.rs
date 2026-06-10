@@ -5,6 +5,15 @@ use uuid::Uuid;
 
 pub type Topic = [u8; 32];
 
+#[derive(Resource, Default)]
+pub struct BrokerDiagnostics {
+    pub position_updates_received: u64,
+    pub position_updates_forwarded: u64,
+    pub position_updates_failed: u64,
+    pub aoi_publishes_received: u64,
+    pub aoi_broadcasts_sent: u64,
+}
+
 //Basically all the things the broker needs to know to do its job of routing messages between clients and shards
 
 #[derive(Resource)]
@@ -30,6 +39,9 @@ pub struct BrokerState {
     // Must be populated via StreamCreated events before any sends are attempted.
     pub connection_reliable_streams: HashMap<Uuid, GameStream>,
     pub connection_unreliable_streams: HashMap<Uuid, GameStream>,
+
+    // Buffer for incoming data per connection, used to handle partial messages
+    pub connection_buffers: HashMap<Uuid, Vec<u8>>,
 }
 
 impl Default for BrokerState {
@@ -45,6 +57,7 @@ impl Default for BrokerState {
             connection_unreliable_streams: HashMap::new(),
             spatial_server_uuid: None,
             client_handoff_topics: HashMap::new(),
+            connection_buffers: HashMap::new(),
         }
     }
 }

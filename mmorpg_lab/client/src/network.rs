@@ -21,11 +21,18 @@ pub struct ClientNetworkManager {
     pub unreliable_stream: Option<GameStream>,
 }
 
+#[derive(Resource, Default)]
+pub struct ClientNetworkDiagnostics {
+    pub aoi_snapshots_received: u64,
+    pub last_aoi_player_count: usize,
+}
+
 pub struct NetworkPlugin;
 
 impl Plugin for NetworkPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<ClientNetworkManager>()
+            .init_resource::<ClientNetworkDiagnostics>()
             .add_systems(OnEnter(AppState::InGame), start_connection)
             .add_systems(Update, handle_network.run_if(in_state(AppState::InGame)));
     }
@@ -62,6 +69,7 @@ fn handle_network(
     mut game_state: ResMut<crate::game::GameState>,
     mut targets: Query<&mut TargetPosition>,
     time: Res<Time>,
+    mut diagnostics: ResMut<ClientNetworkDiagnostics>,
 ) {
     let current_time = time.elapsed_secs_f64();
 
@@ -95,6 +103,7 @@ fn handle_network(
                         &mut targets,
                         current_time,
                         &mut net,
+                        &mut diagnostics,
                     );
                 }
                 GameNetworkEvent::Disconnected(_) => {
@@ -197,6 +206,7 @@ fn handle_server_message(
     targets: &mut Query<&mut TargetPosition>,
     current_time: f64,
     net: &mut ClientNetworkManager,
+    diagnostics: &mut ClientNetworkDiagnostics,
 ) {
     // Deserialize the broker message from the received bytes. If deserialization fails, log a warning and ignore the message.
     let Some(broker_message) = BrokerMessage::from_bytes(data) else {
@@ -254,6 +264,7 @@ fn handle_server_message(
                             game_state,
                             targets,
                             current_time,
+                            diagnostics,
                         );
                     }
                 }
@@ -273,7 +284,23 @@ fn handle_aoi_snapshot(
     game_state: &mut crate::game::GameState,
     targets: &mut Query<&mut TargetPosition>,
     current_time: f64,
+    diagnostics: &mut ClientNetworkDiagnostics,
 ) {
+    diagnostics.aoi_snapshots_received += 1;
+    diagnostics.last_aoi_player_count = players.len();
+
+    // Log every 20 snapshots (1 second at 20Hz) - comment out to reduce noise
+    if diagnostics.aoi_snapshots_received % 20 == 0 {
+        info!(
+            "[CLIENT] AOI snapshot #{} received with {} players",
+            diagnostics.aoi_snapshots_received,
+            players.len()
+        );
+    }
+
+    // Uncomment for detailed per-snapshot logging:
+    // debug!(\"[CLIENT] Received AOI with {} players\", players.len());
+
     let mut current_frame_ids = Vec::new();
 
     for p in players {
