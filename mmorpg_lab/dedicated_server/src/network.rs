@@ -68,14 +68,14 @@ fn poll_network_events(
             }
             // Broker lanes are ready
             GameNetworkEvent::StreamCreated(_connection, stream) => {
+                let topic = string_to_topic(&format!("shard:{}", config.id));
+                let dummy_msg = BrokerMessage::Publish {
+                    topic,
+                    payload: vec![], // Empty payload
+                };
+
                 if stream.is_reliable() {
                     info!("[NETWORK] Reliable stream to Broker is ready. Registering shard.");
-
-                    let topic = string_to_topic(&format!("shard:{}", config.id));
-                    let dummy_msg = BrokerMessage::Publish {
-                        topic,
-                        payload: vec![], // Empty payload sets the route without broadcasting data
-                    };
 
                     if let Err(e) =
                         net.peer
@@ -85,12 +85,20 @@ fn poll_network_events(
                     } else {
                         info!(
                             "[NETWORK] Successfully registered to topic: {}",
-                            config.zone
+                            &format!("shard:{}", config.id)
                         );
                     }
                     net.reliable_stream = Some(stream);
                 } else {
-                    info!("[NETWORK] Unreliable stream to Broker is ready.");
+                    info!("[NETWORK] Unreliable stream to Broker is ready. Waking it up.");
+                    if let Err(e) =
+                        net.peer
+                            .send(&_connection, &stream, Bytes::from(dummy_msg.to_bytes()))
+                    {
+                        error!("Failed to send unreliable dummy publish: {:?}", e);
+                    } else {
+                        info!("[NETWORK] Unreliable stream to Broker is awake.");
+                    }
                     net.unreliable_stream = Some(stream);
                 }
             }

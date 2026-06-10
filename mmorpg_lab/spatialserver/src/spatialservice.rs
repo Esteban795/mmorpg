@@ -117,9 +117,31 @@ impl SpatialService {
                             connection.connection_id,
                             stream.is_reliable()
                         );
+
+                        let dummy_msg = BrokerMessage::Subscribe {
+                            client_id: u32::MAX,
+                            topic: [0u8; 32],
+                        };
+
                         match stream.is_reliable() {
-                            true => quic_broker.reliable_stream = Some(stream),
-                            false => quic_broker.unreliable_stream = Some(stream),
+                            true => {
+                                quic_broker.reliable_stream = Some(stream.clone());
+                                // Send on reliable stream to register the UUID
+                                let _ = quic_broker.peer.send(
+                                    &connection,
+                                    &stream,
+                                    Bytes::from(dummy_msg.to_bytes()),
+                                );
+                            }
+                            
+                            false => {
+                                quic_broker.unreliable_stream = Some(stream.clone());
+                                let _ = quic_broker.peer.send(
+                                    &connection,
+                                    &stream,
+                                    Bytes::from(dummy_msg.to_bytes()),
+                                );
+                            }
                         }
                     }
                     GameNetworkEvent::StreamClosed(connection, stream) => {
