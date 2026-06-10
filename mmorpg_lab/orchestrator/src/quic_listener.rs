@@ -106,29 +106,6 @@ impl QuicOrchestrator {
                             error!("Could not send spawn request: {:?}", e);
                         }
                     }
-                    if let Some(rel_stream) = &self.reliable_stream {
-                        for new_id in new_shards_ids {
-                            let confirmation_msg = OrchestratorMessage::SplitConfirmation {
-                                shard_id,
-                                new_shard_id: new_id,
-                            };
-                            if let Err(e) =
-                                self.peer
-                                    .send(conn, rel_stream, confirmation_msg.to_bytes().into())
-                            {
-                                error!("Failed to send split confirmation: {:?}", e);
-                            }
-                        }
-                    }
-                }
-                OrchestratorMessage::SplitConfirmation {
-                    shard_id,
-                    new_shard_id,
-                } => {
-                    info!(
-                        "Received split confirmation for shard {}: new shard ID is {}",
-                        shard_id, new_shard_id
-                    );
                 }
                 _ => {
                     warn!("Received unsupported message type: {:?}", message);

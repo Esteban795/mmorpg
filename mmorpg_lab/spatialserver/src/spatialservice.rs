@@ -6,9 +6,25 @@ use crate::quadtree::{QuadTree, SplitData};
 use crate::rect::{Rect, Vec2};
 use crate::util::{get_added_ids, get_removed_ids};
 use bytes::Bytes;
-use game_sockets::{protocols::QuicBackend, GameNetworkEvent, GamePeer};
-use shared::broker_protocol::{string_to_topic, BrokerMessage};
+use game_sockets::{GameNetworkEvent, GamePeer, protocols::QuicBackend};
+use shared::broker_protocol::{BrokerMessage, string_to_topic};
 use shared::orchestrator_protocol::OrchestratorMessage;
+use std::time::{Duration, Instant};
+
+#[derive(Copy,Clone,Debug)]
+enum PlayerSplitState {
+    EmitCrossingAlert,
+    EmitSwitchAuthority,
+    EmitCrossingExit,
+}
+
+#[derive(Copy,Clone,Debug)]
+struct PlayerState {
+    client_id: u32,
+    parent_shard_id: u32,
+    neighbor_shard_id : u32,
+    split_state: PlayerSplitState,
+}
 
 const MARGIN: f32 = 50.0;
 pub struct QuicConnection {
@@ -21,11 +37,11 @@ pub struct QuicConnection {
 pub struct SpatialService {
     quad_tree: QuadTree,
     client_shards: HashMap<u32, u32>, // client_id -> shard_id
-
+    client_crossing_state: HashMap<u32, Vec<u32>>,
+    player_states: Vec<PlayerState>,
     // QUIC connections to the broker & orchestrator
     pub quic_broker: Option<QuicConnection>,
     pub quic_orchestrator: Option<QuicConnection>,
-    client_crossing_state: HashMap<u32, Vec<u32>>,
 }
 
 impl SpatialService {
@@ -83,6 +99,33 @@ impl SpatialService {
             quic_broker: quic_broker,
             quic_orchestrator: quic_orchestrator,
             client_crossing_state: HashMap::new(),
+            player_states: Vec::new(),
+        }
+    }
+
+    fn process_player_states(&mut self) {
+        let mut pending_delete  = Vec::new();
+        for i in 0..self.player_states.len() {
+            let player_state = self.player_states.get(i).clone().unwrap();
+            let (client_id, old_shard_id, new_shard_id, split_state) = (player_state.client_id, player_state.parent_shard_id,player_state.neighbor_shard_id, player_state.split_state);
+            match split_state {
+                PlayerSplitState::EmitCrossingAlert => {
+                    self.emit_crossing_alert(client_id, old_shard_id, new_shard_id);
+                    self.player_states[i].split_state = PlayerSplitState::EmitSwitchAuthority;
+                }
+                PlayerSplitState::EmitSwitchAuthority => {
+                    self.emit_switch_authority(client_id, old_shard_id, new_shard_id);
+                    self.player_states[i].split_state = PlayerSplitState::EmitCrossingExit;
+                }
+                PlayerSplitState::EmitCrossingExit => {
+                    self.emit_crossing_exit(client_id, old_shard_id, new_shard_id);
+                    pending_delete.push(i);
+                }
+            }
+        }
+
+        for index in pending_delete.into_iter().rev() {
+            self.player_states.remove(index);
         }
     }
 
@@ -177,7 +220,6 @@ impl SpatialService {
     }
 
     fn poll_orchestrator_events(&mut self) {
-        let mut messages_to_process: Vec<Bytes> = Vec::new();
         if let Some(quic_orchestrator) = &mut self.quic_orchestrator {
             while let Ok(Some(event)) = quic_orchestrator.peer.poll() {
                 match event {
@@ -234,12 +276,11 @@ impl SpatialService {
                         data,
                     } => {
                         info!(
-                            " Message received from orchestrator {:?} on stream {:?}: {} bytes",
+                            " Unexpected message received from orchestrator {:?} on stream {:?}: {} bytes",
                             connection.connection_id,
                             stream,
                             data.len()
                         );
-                        messages_to_process.push(data);
                     }
                     GameNetworkEvent::Error { connection, inner } => {
                         warn!(
@@ -249,10 +290,6 @@ impl SpatialService {
                     }
                 }
             }
-        }
-
-        for data in messages_to_process {
-            self.handle_orchestrator_message(&data);
         }
     }
 
@@ -265,6 +302,14 @@ impl SpatialService {
                         client_id, x, y
                     );
                     self.handle_position_update(client_id, Vec2 { x, y });
+                }
+                BrokerMessage::ShardReady { shard_id } => {
+                    info!(
+                        "Received ShardReady from broker for shard {}: activating it and migrating affected players if necessary",
+                        shard_id
+                    );
+                    self.handle_shard_ready(shard_id);
+                    self.quad_tree.print_state();
                 }
                 _ => {
                     warn!(
@@ -282,35 +327,21 @@ impl SpatialService {
         }
     }
 
-    fn handle_orchestrator_message(&mut self, data: &[u8]) {
-        if let Some(message) = OrchestratorMessage::from_bytes(data) {
-            match message {
-                OrchestratorMessage::SplitConfirmation {
-                    shard_id,
-                    new_shard_id,
-                } => {
-                    info!(
-                        "Received split confirmation from orchestrator for shard {} -> new shard {}",
-                        shard_id, new_shard_id
-                    );
-                    self.handle_orchestrator_shard_ready(new_shard_id);
-                    self.quad_tree.print_state();
-                }
-                _ => {
-                    warn!(
-                        "Received unsupported message type from orchestrator: {:?}",
-                        message
-                    );
-                }
-            }
-        }
-    }
-
     pub fn run(&mut self) {
+        let mut last_10hz_tick = Instant::now();
+        let interval_10hz = Duration::from_millis(100);
+
         loop {
             self.poll_broker_events();
             self.poll_orchestrator_events();
             // self.quad_tree.print_state();
+
+            let now = Instant::now();
+
+            if (now.duration_since(last_10hz_tick)) >= interval_10hz {
+                self.process_player_states();
+                last_10hz_tick += interval_10hz;
+            }
         }
     }
 
@@ -337,7 +368,11 @@ impl SpatialService {
                         client_id, result.network_shard_id
                     );
                     self.send_subscribe(client_id, result.network_shard_id);
-                    self.client_crossing_state.insert(client_id, vec![result.network_shard_id]);
+
+                    // When a new player join, insert his first shard to avoid unwanted crossing alerts
+                    // THIS DOES NOT PREVENT THE PLAYER FROM HAVING CROSSING ALERTS IF HE SPAWN NEAR BORDERS
+                    self.client_crossing_state
+                        .insert(client_id, vec![result.network_shard_id]);
                 }
 
                 self.client_shards
@@ -363,12 +398,11 @@ impl SpatialService {
                 .unwrap_or_default();
 
             if shards_near != old_nearby {
-
                 let added = get_added_ids(&old_nearby, &shards_near);
                 let removed = get_removed_ids(&old_nearby, &shards_near);
 
                 for neighbor_shard_id in added {
-                     self.emit_crossing_alert(client_id, result.network_shard_id, neighbor_shard_id);
+                    self.emit_crossing_alert(client_id, result.network_shard_id, neighbor_shard_id);
                 }
                 for neighbor_shard_id in removed {
                     self.emit_crossing_exit(client_id, neighbor_shard_id, result.network_shard_id);
@@ -405,7 +439,7 @@ impl SpatialService {
         }
     }
 
-    pub fn handle_orchestrator_shard_ready(&mut self, ready_child_shard_id: u32) {
+    pub fn handle_shard_ready(&mut self, ready_child_shard_id: u32) {
         info!(
             "Orchestrator confirmed shard {} is ready, activating it and migrating affected players if necessary",
             ready_child_shard_id
@@ -416,15 +450,26 @@ impl SpatialService {
         {
             // Partial mass handoff : only move players that are in this shard, old shard is still active and can serve players that are not in the new shard
             for (affected_client, new_network_shard) in updates {
-                self.send_unsubscribe(affected_client, parent_shard_id);
-                self.send_subscribe(affected_client, new_network_shard);
-                self.client_shards
-                    .insert(affected_client, new_network_shard);
-
                 info!(
-                    "Player {} successfully transferred from parent {} to child {}",
+                    "Player {} is affected by the split of shard {}, moving it to new shard {}",
                     affected_client, parent_shard_id, new_network_shard
                 );
+                self.player_states.push( PlayerState {
+                    client_id: affected_client,
+                    parent_shard_id : parent_shard_id,
+                    neighbor_shard_id : new_network_shard,
+                    split_state: PlayerSplitState::EmitCrossingAlert,
+                });
+
+                // self.send_unsubscribe(affected_client, parent_shard_id);
+                // self.send_subscribe(affected_client, new_network_shard);
+                // self.client_shards
+                //     .insert(affected_client, new_network_shard);
+
+                // info!(
+                //     "Player {} successfully transferred from parent {} to child {}",
+                //     affected_client, parent_shard_id, new_network_shard
+                // );
             }
         } else {
             warn!(
@@ -523,7 +568,6 @@ impl SpatialService {
             client_id,
             owner_shard_id, neighbor_shard_id, "SwitchAuthority"
         );
-
 
         let topic = format!("shard:{}", owner_shard_id);
         let topic_bytes = string_to_topic(&topic);
