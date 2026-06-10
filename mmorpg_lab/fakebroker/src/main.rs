@@ -53,8 +53,8 @@ fn main() {
             id: 0,
             x: 0.0,
             y: 0.0,
-            factor_x: 2.0,
-            factor_y: 2.0,
+            factor_x: 0.0,
+            factor_y: 0.0,
         },
     );
 
@@ -62,10 +62,10 @@ fn main() {
         1,
         Player {
             id: 1,
-            x: 50.0,
-            y: 50.0,
-            factor_x: 2.0,
-            factor_y: -2.0,
+            x: 0.0,
+            y: 0.0,
+            factor_x: 0.0,
+            factor_y: 0.0,
         },
     );
 
@@ -75,8 +75,8 @@ fn main() {
             id: 2,
             x: 0.0,
             y: 0.0,
-            factor_x: -2.0,
-            factor_y: 2.0,
+            factor_x: 0.0,
+            factor_y:0.0,
         },
     );
 
@@ -86,16 +86,29 @@ fn main() {
             id: 3,
             x: 0.0,
             y: 0.0,
-            factor_x: -2.0,
-            factor_y: -2.0,
+            factor_x: 0.0,
+            factor_y: 0.0,
         },
     );
 
     let player_count = player_registry.players.len();
+
+    let mut maxcount = 5;
     loop {
         if should_send {
-            let client_id = (count % player_count) as u32;
+            // let client_id = (count % player_count) as u32;
+            let mut client_id = 0;
+            if maxcount > 0 {
+                client_id = (count % player_count) as u32;
+                maxcount -= 1;
+            }
             let player = player_registry.players.get_mut(&client_id).unwrap();
+
+            if maxcount <= 0 {
+                if player.x > 40.0 {
+                    player.factor_x = -10.0;
+                } 
+            }
             let update_msg = BrokerMessage::PositionUpdate {
                 client_id,
                 x: player.x,
