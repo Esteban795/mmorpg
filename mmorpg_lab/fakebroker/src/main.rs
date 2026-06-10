@@ -51,9 +51,9 @@ fn main() {
         0,
         Player {
             id: 0,
-            x: 0.0,
-            y: 0.0,
-            factor_x: 0.0,
+            x: -250.0,
+            y: -250.0,
+            factor_x: 10.0,
             factor_y: 0.0,
         },
     );
@@ -62,8 +62,8 @@ fn main() {
         1,
         Player {
             id: 1,
-            x: 0.0,
-            y: 0.0,
+            x: 250.0,
+            y: -250.0,
             factor_x: 0.0,
             factor_y: 0.0,
         },
@@ -73,8 +73,8 @@ fn main() {
         2,
         Player {
             id: 2,
-            x: 0.0,
-            y: 0.0,
+            x: -250.0,
+            y: 250.0,
             factor_x: 0.0,
             factor_y:0.0,
         },
@@ -84,8 +84,8 @@ fn main() {
         3,
         Player {
             id: 3,
-            x: 0.0,
-            y: 0.0,
+            x: 250.0,
+            y: 250.0,
             factor_x: 0.0,
             factor_y: 0.0,
         },
