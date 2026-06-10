@@ -535,63 +535,62 @@ pub fn process_network_events(
                                 }
                             }
 
-                        if let Some(&new_auth_uuid) = state.topic_to_shard.get(&new_auth_topic) {
-                            // Notify the new authority shard about the client's exit from the old shard (could be used for cleanup, AOI updates, etc.)
-                            if let Some(rel_stream) =
-                                state.connection_reliable_streams.get(&new_auth_uuid)
+                            if let Some(&new_auth_uuid) = state.topic_to_shard.get(&new_auth_topic)
                             {
-                                let msg = BrokerMessage::CrossingExit {
-                                    client_id,
-                                    obsolete_auth_topic,
-                                    new_auth_topic,
+                                // Notify the new authority shard about the client's exit from the old shard (could be used for cleanup, AOI updates, etc.)
+                                if let Some(rel_stream) =
+                                    state.connection_reliable_streams.get(&new_auth_uuid)
+                                {
+                                    let msg = BrokerMessage::CrossingExit {
+                                        client_id,
+                                        obsolete_auth_topic,
+                                        new_auth_topic,
+                                    }
+                                    .to_bytes();
+                                    let _ = network.peer.send(
+                                        &new_auth_uuid.into(),
+                                        rel_stream,
+                                        Bytes::from(msg),
+                                    );
+                                } else {
+                                    warn!(
+                                        "[BROKER] No reliable stream for new authority shard {:?}",
+                                        topic_to_string(&new_auth_topic)
+                                    );
                                 }
-                                .to_bytes();
-                                let _ = network.peer.send(
-                                    &new_auth_uuid.into(),
-                                    rel_stream,
-                                    Bytes::from(msg),
-                                );
+                            }
+                        }
+
+                        BrokerMessage::ShardReady { shard_id } => {
+                            info!("[BROKER] Shard with UUID {:?} reports ready.", shard_id);
+
+                            if let Some(spatial_uuid) = state.spatial_server_uuid {
+                                if let Some(rel_stream) =
+                                    state.connection_reliable_streams.get(&spatial_uuid)
+                                {
+                                    let msg = BrokerMessage::ShardReady { shard_id }.to_bytes();
+                                    let _ = network.peer.send(
+                                        &spatial_uuid.into(),
+                                        rel_stream,
+                                        Bytes::from(msg),
+                                    );
+                                } else {
+                                    warn!(
+                                        "[BROKER] No reliable stream for spatial server to report shard ready."
+                                    );
+                                }
                             } else {
                                 warn!(
-                                    "[BROKER] No reliable stream for new authority shard {:?}",
-                                    topic_to_string(&new_auth_topic)
+                                    "[BROKER] No spatial server UUID registered yet to report shard ready."
                                 );
                             }
                         }
-                    }
-
-                    BrokerMessage::ShardReady { shard_id } => {
-                        info!(
-                            "[BROKER] Shard with UUID {:?} reports ready.",
-                            shard_id
-                        );
-
-                        if let Some(spatial_uuid) = state.spatial_server_uuid {
-                            if let Some(rel_stream) =
-                                state.connection_reliable_streams.get(&spatial_uuid)
-                            {
-                                let msg = BrokerMessage::ShardReady { shard_id }.to_bytes();
-                                let _ = network.peer.send(
-                                    &spatial_uuid.into(),
-                                    rel_stream,
-                                    Bytes::from(msg),
-                                );
-                            } else {
-                                warn!(
-                                    "[BROKER] No reliable stream for spatial server to report shard ready."
-                                );
-                            }
-                        } else {
+                        _ => {
                             warn!(
-                                "[BROKER] No spatial server UUID registered yet to report shard ready."
+                                "[BROKER] Received unsupported message type from UUID {:?}. Ignoring.",
+                                connection.connection_id
                             );
                         }
-                    }
-                    _ => {
-                        warn!(
-                            "[BROKER] Received unsupported message type from UUID {:?}. Ignoring.",
-                            connection.connection_id
-                        );
                     }
                 }
             }

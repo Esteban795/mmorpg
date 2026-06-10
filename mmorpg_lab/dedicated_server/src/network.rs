@@ -43,11 +43,6 @@ pub struct NetworkFrameCounter {
 }
 
 #[derive(Resource, Default)]
-pub struct PositionUpdateCounter {
-    pub frame_count: u64, // Increments every frame, resets every 4 frames (5Hz at 20Hz tick rate)
-}
-
-#[derive(Resource, Default)]
 pub struct NetworkDiagnostics {
     pub position_updates_attempted: u64,
     pub position_updates_failed: u64,
@@ -61,7 +56,6 @@ impl Plugin for NetworkPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<PlayerRegistry>()
             .init_resource::<NetworkFrameCounter>()
-            .init_resource::<PositionUpdateCounter>()
             .init_resource::<NetworkDiagnostics>()
             .add_systems(
                 Update,
@@ -458,22 +452,14 @@ fn send_inter_shard(
 }
 
 // -------------------------------------------------------------------------
-// Position Updates (5Hz) - For Spatial Server
+// Position Updates (20Hz) - For Spatial Server
 // -------------------------------------------------------------------------
 fn broadcast_positions(
     net: ResMut<NetworkManager>,
     registry: Res<PlayerRegistry>,
     config: Res<ServerConfig>,
-    mut pos_counter: ResMut<PositionUpdateCounter>,
     mut diagnostics: ResMut<NetworkDiagnostics>,
 ) {
-    pos_counter.frame_count += 1;
-
-    // Only send PositionUpdates every 4 frames (20Hz / 4 = 5Hz)
-    if pos_counter.frame_count % 1 != 0 {
-        return;
-    }
-
     let Some(broker_conn) = &net.broker_connection else {
         // debug!("[NETWORK] Cannot send positions: broker_connection is None");
         return;
@@ -487,7 +473,7 @@ fn broadcast_positions(
     let mut positions_sent = 0usize;
     let mut positions_failed = 0usize;
 
-    // ============ Send Position Updates for the Spatial Server (5Hz) ===========
+    // ============ Send Position Updates for the Spatial Server (20Hz) ===========
     for (client_id, player_data) in &registry.players {
         if player_data.state == EntityState::Ghost {
             // Don't send PositionUpdates for ghosts
@@ -517,7 +503,7 @@ fn broadcast_positions(
             positions_sent += 1;
         }
 
-        // --- Handoff Logics : Send GhostUpdates (5Hz) ---
+        // --- Handoff Logics : Send GhostUpdates (20Hz) ---
         if let EntityState::PendingHandoff { neighbor_topics } = &player_data.state {
             let ghost_update_payload = InterShardPayload::GhostUpdate {
                 entity_id: *client_id,
@@ -546,8 +532,8 @@ fn broadcast_positions(
 
     if positions_sent > 0 || positions_failed > 0 {
         info!(
-            "[NETWORK-5Hz] PositionUpdates: {} sent, {} failed (frame: {})",
-            positions_sent, positions_failed, pos_counter.frame_count
+            "[NETWORK-20Hz] PositionUpdates: {} sent, {} failed",
+            positions_sent, positions_failed
         );
     }
 }
