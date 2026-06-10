@@ -438,7 +438,7 @@ impl SpatialService {
     fn send_unsubscribe(&self, client_id: u32, shard_id: u32) {
         let topic = format!("shard:{}", shard_id);
         info!(client_id, topic, "Unsubscribe");
-        let mut topic_bytes = string_to_topic(&topic);
+        let topic_bytes = string_to_topic(&topic);
         let msg = BrokerMessage::Unsubscribe {
             client_id,
             topic: topic_bytes,
@@ -464,7 +464,7 @@ impl SpatialService {
         let topic = format!("shard:{}", shard_id);
 
         info!(client_id, topic, "Subscribe");
-        let mut topic_bytes = string_to_topic(&topic);
+        let topic_bytes = string_to_topic(&topic);
 
         let msg = BrokerMessage::Subscribe {
             client_id,
