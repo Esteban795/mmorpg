@@ -87,6 +87,7 @@ fn poll_network_events(
                 if stream.is_reliable() {
                     info!("[NETWORK] Reliable stream to Broker is ready. Registering shard.");
 
+                    // Send Dummy message which contains the shard topic in ordre to register this connection to the shard topic
                     if let Err(e) =
                         net.peer
                             .send(&_connection, &stream, Bytes::from(dummy_msg.to_bytes()))
@@ -98,6 +99,14 @@ fn poll_network_events(
                             &format!("shard:{}", config.id)
                         );
                     }
+
+                    let ready_msg = BrokerMessage::ShardReady {
+                        shard_id: config.id,
+                    };
+                    let _ = net
+                        .peer
+                        .send(&_connection, &stream, Bytes::from(ready_msg.to_bytes()));
+
                     net.reliable_stream = Some(stream);
                 } else {
                     info!("[NETWORK] Unreliable stream to Broker is ready. Waking it up.");

@@ -12,7 +12,7 @@ use tracing_subscriber::FmtSubscriber;
 use heartbeat::{HeartbeatPlugin, HeartbeatSocket};
 use network::{NetworkManager, NetworkPlugin};
 use shared::{DEFAULT_BROKER_IP, DEFAULT_BROKER_PORT};
-use shared::{DEFAULT_ORCHESTRATOR_ADDR, DEFAULT_ORCH_HEARTBEAT_PORT};
+use shared::{DEFAULT_ORCH_HEARTBEAT_PORT, DEFAULT_ORCHESTRATOR_ADDR};
 
 const DEFAULT_DS_PORT: &str = "8001";
 const DEFAULT_ZONE: &str = "shard:0";

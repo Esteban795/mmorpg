@@ -6,8 +6,8 @@ use crate::quadtree::{QuadTree, SplitData};
 use crate::rect::{Rect, Vec2};
 use crate::util::{get_added_ids, get_removed_ids};
 use bytes::Bytes;
-use game_sockets::{protocols::QuicBackend, GameNetworkEvent, GamePeer};
-use shared::broker_protocol::{string_to_topic, BrokerMessage};
+use game_sockets::{GameNetworkEvent, GamePeer, protocols::QuicBackend};
+use shared::broker_protocol::{BrokerMessage, string_to_topic};
 use shared::orchestrator_protocol::OrchestratorMessage;
 
 const MARGIN: f32 = 50.0;
@@ -137,7 +137,7 @@ impl SpatialService {
                                     Bytes::from(dummy_msg.to_bytes()),
                                 );
                             }
-                            
+
                             false => {
                                 quic_broker.unreliable_stream = Some(stream.clone());
                                 let _ = quic_broker.peer.send(
@@ -333,6 +333,8 @@ impl SpatialService {
             self.poll_broker_events();
             self.poll_orchestrator_events();
             // self.quad_tree.print_state();
+
+            //std::thread::sleep(std::time::Duration::from_millis(10));
         }
     }
 
@@ -359,7 +361,8 @@ impl SpatialService {
                         client_id, result.network_shard_id
                     );
                     self.send_subscribe(client_id, result.network_shard_id);
-                    self.client_crossing_state.insert(client_id, vec![result.network_shard_id]);
+                    self.client_crossing_state
+                        .insert(client_id, vec![result.network_shard_id]);
                 }
 
                 self.client_shards
@@ -385,12 +388,11 @@ impl SpatialService {
                 .unwrap_or_default();
 
             if shards_near != old_nearby {
-
                 let added = get_added_ids(&old_nearby, &shards_near);
                 let removed = get_removed_ids(&old_nearby, &shards_near);
 
                 for neighbor_shard_id in added {
-                     self.emit_crossing_alert(client_id, result.network_shard_id, neighbor_shard_id);
+                    self.emit_crossing_alert(client_id, result.network_shard_id, neighbor_shard_id);
                 }
                 for neighbor_shard_id in removed {
                     self.emit_crossing_exit(client_id, neighbor_shard_id, result.network_shard_id);
@@ -545,7 +547,6 @@ impl SpatialService {
             client_id,
             owner_shard_id, neighbor_shard_id, "SwitchAuthority"
         );
-
 
         let topic = format!("shard:{}", owner_shard_id);
         let topic_bytes = string_to_topic(&topic);
