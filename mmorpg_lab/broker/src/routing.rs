@@ -1,9 +1,10 @@
 use crate::network::BrokerNetwork;
 use crate::state::BrokerState;
+use crate::state::Topic;
 use bevy::prelude::*;
 use bytes::Bytes;
 use game_sockets::{GameNetworkEvent, GameStream};
-use shared::broker_protocol::{BrokerMessage, string_to_topic};
+use shared::broker_protocol::{BrokerMessage, string_to_topic, topic_to_string};
 use shared::{ClientMessage, ServerMessage};
 use tracing::{debug, info, warn};
 
@@ -62,7 +63,6 @@ pub fn process_network_events(mut network: ResMut<BrokerNetwork>, mut state: Res
 
                     //If the client was subscribed to a shard/topic
                     if let Some(topic) = state.client_to_topic.remove(&id) {
-
                         //Inform the shard of the disconnect so it can remove the player from the AOI and broadcast the update to other clients.
                         if let Some(&shard_uuid) = state.topic_to_shard.get(&topic) {
                             if let Some(shard_stream) =
@@ -236,8 +236,17 @@ pub fn process_network_events(mut network: ResMut<BrokerNetwork>, mut state: Res
                             }
                         }
 
-                        // ROUTE INPUT TO THE CORRECT SHARD
-                        if let Some(&topic) = state.client_to_topic.get(&client_id) {
+                        // ROUTE INPUT TO THE CORRECT SHARD AND TO THE NEIGHBORING SHARDS IF NECESSARY (for handoff during crossing)
+                        //Get owning sharrd/topic for this client
+                        let primary = state.client_to_topic.get(&client_id).copied();
+                        //Get neighboring shards/topics for this client (if any)
+                        let extras: Vec<Topic> = state
+                            .client_handoff_topics
+                            .get(&client_id)
+                            .map(|s| s.iter().copied().collect())
+                            .unwrap_or_default();
+
+                        for topic in primary.into_iter().chain(extras) {
                             if let Some(&shard_uuid) = state.topic_to_shard.get(&topic) {
                                 //use the SHARD's own stream, matching the reliability of the
                                 // incoming client stream.
@@ -258,7 +267,8 @@ pub fn process_network_events(mut network: ResMut<BrokerNetwork>, mut state: Res
                                     );
                                 } else {
                                     warn!(
-                                        "[BROKER] No shard stream registered yet for client {} input. Dropped (shard not connected yet?).",
+                                        "[BROKER] No stream for shard {:?}, client {} input dropped.",
+                                        topic_to_string(&topic),
                                         client_id
                                     );
                                 }
@@ -291,6 +301,210 @@ pub fn process_network_events(mut network: ResMut<BrokerNetwork>, mut state: Res
                         }
                     }
 
+                    BrokerMessage::CrossingAlert {
+                        client_id,
+                        dest_authority_topic,
+                        neighbor_topic,
+                    } => {
+                        info!(
+                            "[BROKER] CrossingAlert — client {} crossing from {} into {}",
+                            client_id,
+                            topic_to_string(&dest_authority_topic),
+                            topic_to_string(&neighbor_topic)
+                        );
+                        // Forward to the authority shard
+                        if let Some(&auth_uuid) = state.topic_to_shard.get(&dest_authority_topic) {
+                            if let Some(rel_stream) =
+                                state.connection_reliable_streams.get(&auth_uuid)
+                            {
+                                let msg = BrokerMessage::CrossingAlert {
+                                    client_id,
+                                    dest_authority_topic,
+                                    neighbor_topic,
+                                }
+                                .to_bytes();
+                                let _ = network.peer.send(
+                                    &auth_uuid.into(),
+                                    rel_stream,
+                                    Bytes::from(msg),
+                                );
+                            } else {
+                                warn!(
+                                    "[BROKER] No reliable stream for authority shard {:?}",
+                                    topic_to_string(&dest_authority_topic)
+                                );
+                            }
+                        } else {
+                            warn!(
+                                "[BROKER] CrossingAlert: no shard registered for dest_authority_topic {:?}",
+                                topic_to_string(&dest_authority_topic)
+                            );
+                        }
+
+                        // Subscribe neighbor shard to this client's inputs
+                        //  (neighbor starts receiving movement so it can pre-simulate the arriving entity)
+                        state
+                            .client_handoff_topics
+                            .entry(client_id)
+                            .or_default()
+                            .insert(neighbor_topic);
+
+                        // Subscribe client to neighbor shard's broadcasts
+                        // (client starts seeing AOI from the new shard before the authority fully hands off)
+                        state
+                            .topic_subscribers
+                            .entry(neighbor_topic)
+                            .or_default()
+                            .insert(client_id);
+                    }
+
+                    BrokerMessage::InterShardMessage {
+                        topic_dest,
+                        topic_from,
+                        payload,
+                    } => {
+                        // Simple inter-shard messaging forwarded by the Broker, used for shard-to-shard handoff coordination for now but could be used for other cross-shard communication in the future.
+                        if let Some(&dest_uuid) = state.topic_to_shard.get(&topic_dest) {
+                            // Use a reliable stream since these messages are currently only used for handoff coordination, which is critical to get right.
+                            if let Some(rel_stream) =
+                                state.connection_reliable_streams.get(&dest_uuid)
+                            {
+                                let msg = BrokerMessage::InterShardMessage {
+                                    topic_dest,
+                                    topic_from,
+                                    payload,
+                                }
+                                .to_bytes();
+                                let _ = network.peer.send(
+                                    &dest_uuid.into(),
+                                    rel_stream,
+                                    Bytes::from(msg),
+                                );
+                            } else {
+                                warn!(
+                                    "[BROKER] No reliable stream for destination shard {:?}",
+                                    topic_to_string(&topic_dest)
+                                );
+                            }
+                        } else {
+                            warn!(
+                                "[BROKER] InterShardMessage: no shard registered for topic_dest {:?}",
+                                topic_to_string(&topic_dest)
+                            );
+                        }
+                    }
+
+                    //Message relayed from spatial server to old_auth_topic.
+                    BrokerMessage::AuthoritySwitch {
+                        client_id,
+                        old_auth_topic,
+                        new_auth_topic,
+                    } => {
+                        info!(
+                            "[BROKER] AuthoritySwitch — client {} authority moving from {} to {}",
+                            client_id,
+                            topic_to_string(&old_auth_topic),
+                            topic_to_string(&new_auth_topic)
+                        );
+                        if let Some(&old_auth_uuid) = state.topic_to_shard.get(&old_auth_topic) {
+                            if let Some(rel_stream) =
+                                state.connection_reliable_streams.get(&old_auth_uuid)
+                            {
+                                let msg = BrokerMessage::AuthoritySwitch {
+                                    client_id,
+                                    old_auth_topic,
+                                    new_auth_topic,
+                                }
+                                .to_bytes();
+                                let _ = network.peer.send(
+                                    &old_auth_uuid.into(),
+                                    rel_stream,
+                                    Bytes::from(msg),
+                                );
+                            } else {
+                                warn!(
+                                    "[BROKER] No reliable stream for old authority shard {:?}",
+                                    topic_to_string(&old_auth_topic)
+                                );
+                            }
+                        } else {
+                            warn!(
+                                "[BROKER] AuthoritySwitch: no shard registered for old_auth_topic {:?}",
+                                topic_to_string(&old_auth_topic)
+                            );
+                        }
+                    }
+
+                    BrokerMessage::CrossingExit {
+                        client_id,
+                        obsolete_auth_topic,
+                        new_auth_topic,
+                    } => {
+                        info!(
+                            "[BROKER] CrossingExit — client {} exiting {} (now obsolete authority) into {}",
+                            client_id,
+                            topic_to_string(&obsolete_auth_topic),
+                            topic_to_string(&new_auth_topic)
+                        );
+                        // Unsubscribe client from obsolete shard/topic
+                        if let Some(subs) = state.topic_subscribers.get_mut(&obsolete_auth_topic) {
+                            subs.remove(&client_id);
+                        }
+                        state.client_to_topic.remove(&client_id);
+
+                        // Unsubscribe neighbor shard from this client's inputs
+                        if let Some(handoffs) = state.client_handoff_topics.get_mut(&client_id) {
+                            handoffs.remove(&obsolete_auth_topic);
+                        }
+                        if let Some(&obsolete_uuid) = state.topic_to_shard.get(&obsolete_auth_topic)
+                        {
+                            // Notify the obsolete shard about the client's exit
+                            if let Some(rel_stream) =
+                                state.connection_reliable_streams.get(&obsolete_uuid)
+                            {
+                                let msg = BrokerMessage::CrossingExit {
+                                    client_id,
+                                    obsolete_auth_topic,
+                                    new_auth_topic,
+                                }
+                                .to_bytes();
+                                let _ = network.peer.send(
+                                    &obsolete_uuid.into(),
+                                    rel_stream,
+                                    Bytes::from(msg),
+                                );
+                            } else {
+                                warn!(
+                                    "[BROKER] No reliable stream for obsolete authority shard {:?}",
+                                    topic_to_string(&obsolete_auth_topic)
+                                );
+                            }
+                        }
+
+                        if let Some(&new_auth_uuid) = state.topic_to_shard.get(&new_auth_topic) {
+                            // Notify the new authority shard about the client's exit from the old shard (could be used for cleanup, AOI updates, etc.)
+                            if let Some(rel_stream) =
+                                state.connection_reliable_streams.get(&new_auth_uuid)
+                            {
+                                let msg = BrokerMessage::CrossingExit {
+                                    client_id,
+                                    obsolete_auth_topic,
+                                    new_auth_topic,
+                                }
+                                .to_bytes();
+                                let _ = network.peer.send(
+                                    &new_auth_uuid.into(),
+                                    rel_stream,
+                                    Bytes::from(msg),
+                                );
+                            } else {
+                                warn!(
+                                    "[BROKER] No reliable stream for new authority shard {:?}",
+                                    topic_to_string(&new_auth_topic)
+                                );
+                            }
+                        }
+                    }
                     _ => {
                         warn!(
                             "[BROKER] Received unsupported message type from UUID {:?}. Ignoring.",

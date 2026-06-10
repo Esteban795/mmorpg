@@ -16,8 +16,9 @@ pub struct BrokerState {
     // Client ID -> Topic (shard) they are subscribed to
     pub client_to_topic: HashMap<u32, Topic>,
 
-    // Shard routing (Topic -> Shard's Network Uuid)
+    // Shard routing (Topic -> Shard's with authority Network Uuid)
     pub topic_to_shard: HashMap<Topic, Uuid>,
+    pub client_handoff_topics: HashMap<u32, HashSet<Topic>>,
 
     // Network Identity mapping (Uuid <-> u32)
     pub next_client_id: u32,
@@ -43,6 +44,7 @@ impl Default for BrokerState {
             connection_reliable_streams: HashMap::new(),
             connection_unreliable_streams: HashMap::new(),
             spatial_server_uuid: None,
+            client_handoff_topics: HashMap::new(),
         }
     }
 }
