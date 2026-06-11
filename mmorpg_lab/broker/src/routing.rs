@@ -8,8 +8,6 @@ use shared::broker_protocol::{BrokerMessage, string_to_topic, topic_to_string};
 use shared::{ClientMessage, ServerMessage};
 use tracing::{debug, info, warn};
 
-pub const DEFAULT_TOPIC: &str = "shard:0";
-
 pub fn process_network_events(
     mut network: ResMut<BrokerNetwork>,
     mut state: ResMut<BrokerState>,
@@ -66,37 +64,40 @@ pub fn process_network_events(
                 if let Some(id) = state.uuid_to_id.remove(&conn.connection_id) {
                     state.id_to_uuid.remove(&id);
 
-                    //If the client was subscribed to a shard/topic
-                    if let Some(topic) = state.client_to_topic.remove(&id) {
-                        //Inform the shard of the disconnect so it can remove the player from the AOI and broadcast the update to other clients.
-                        if let Some(&shard_uuid) = state.topic_to_shard.get(&topic) {
-                            if let Some(shard_stream) =
-                                state.connection_reliable_streams.get(&shard_uuid)
-                            {
-                                let disconnect_msg = ClientMessage::Disconnect;
-                                // Pad the disconnect message to 16 bytes to fit the broker protocol's ClientInput struct, even though the payload is empty for Disconnect.
-                                if let Ok(input_bytes) = bincode::serialize(&disconnect_msg) {
-                                    let mut input_array = [0u8; 16];
-                                    let len = input_bytes.len().min(16);
-                                    input_array[..len].copy_from_slice(&input_bytes[..len]);
+                    // Notify every shard the client was routed to (covers both normal
+                    // operation and mid-handoff disconnects where two shards are active).
+                    if let Some(topics) = state.client_topics.remove(&id) {
+                        for topic in &topics {
+                            //Inform the shard of the disconnect so it can remove the player from the AOI and broadcast the update to other clients.
+                            if let Some(&shard_uuid) = state.topic_to_shard.get(topic) {
+                                if let Some(shard_stream) =
+                                    state.connection_reliable_streams.get(&shard_uuid)
+                                {
+                                    let disconnect_msg = ClientMessage::Disconnect;
+                                    // Pad the disconnect message to 16 bytes to fit the broker protocol's ClientInput struct, even though the payload is empty for Disconnect.
+                                    if let Ok(input_bytes) = bincode::serialize(&disconnect_msg) {
+                                        let mut input_array = [0u8; 16];
+                                        let len = input_bytes.len().min(16);
+                                        input_array[..len].copy_from_slice(&input_bytes[..len]);
 
-                                    let forward_msg = BrokerMessage::ClientInput {
-                                        client_id: id,
-                                        input: input_array,
+                                        let forward_msg = BrokerMessage::ClientInput {
+                                            client_id: id,
+                                            input: input_array,
+                                        }
+                                        .to_bytes();
+
+                                        let _ = network.peer.send(
+                                            &shard_uuid.into(),
+                                            shard_stream,
+                                            Bytes::from(forward_msg),
+                                        );
                                     }
-                                    .to_bytes();
-
-                                    let _ = network.peer.send(
-                                        &shard_uuid.into(),
-                                        shard_stream,
-                                        Bytes::from(forward_msg),
-                                    );
                                 }
                             }
-                        }
 
-                        if let Some(subs) = state.topic_subscribers.get_mut(&topic) {
-                            subs.remove(&id);
+                            if let Some(subs) = state.topic_subscribers.get_mut(topic) {
+                                subs.remove(&id);
+                            }
                         }
                     }
                     info!(
@@ -144,7 +145,11 @@ pub fn process_network_events(
                                 .entry(topic)
                                 .or_default()
                                 .insert(client_id);
-                            state.client_to_topic.insert(client_id, topic);
+                            state
+                                .client_topics
+                                .entry(client_id)
+                                .or_default()
+                                .insert(topic);
                             info!("[BROKER] Client {} subscribed to topic.", client_id);
                         }
 
@@ -152,7 +157,9 @@ pub fn process_network_events(
                             if let Some(subs) = state.topic_subscribers.get_mut(&topic) {
                                 subs.remove(&client_id);
                             }
-                            state.client_to_topic.remove(&client_id);
+                            if let Some(topics) = state.client_topics.get_mut(&client_id) {
+                                topics.remove(&topic);
+                            }
                             info!("[BROKER] Client {} unsubscribed.", client_id);
                         }
 
@@ -229,8 +236,15 @@ pub fn process_network_events(
                                         }
 
                                         //Assign the new player to a default shard/topic for now as a spawn point.
-                                        let default_topic = string_to_topic(DEFAULT_TOPIC);
-                                        state.client_to_topic.insert(real_id, default_topic); // TODO: shoudl insert in a vec topic
+                                        let default_topic = string_to_topic(&format!(
+                                            "shard:{}",
+                                            state.default_shard_id
+                                        ));
+                                        state
+                                            .client_topics
+                                            .entry(real_id)
+                                            .or_default()
+                                            .insert(default_topic);
                                         state
                                             .topic_subscribers
                                             .entry(default_topic)
@@ -238,8 +252,10 @@ pub fn process_network_events(
                                             .insert(real_id);
 
                                         info!(
-                                            "[BROKER] Intercepted Join — assigned ID {} to UUID {:?}, spawned in shard:0.",
-                                            real_id, connection.connection_id
+                                            "[BROKER] Intercepted Join — assigned ID {} to UUID {:?}, spawned in shard:{}.",
+                                            real_id,
+                                            connection.connection_id,
+                                            state.default_shard_id
                                         );
                                     }
                                 } else {
@@ -255,15 +271,13 @@ pub fn process_network_events(
 
                             // ROUTE INPUT TO THE CORRECT SHARD AND TO THE NEIGHBORING SHARDS IF NECESSARY (for handoff during crossing)
                             //Get owning sharrd/topic for this client
-                            let primary = state.client_to_topic.get(&client_id).copied();
-                            //Get neighboring shards/topics for this client (if any)
-                            let extras: Vec<Topic> = state
-                                .client_handoff_topics
+                            let topics: Vec<Topic> = state
+                                .client_topics
                                 .get(&client_id)
                                 .map(|s| s.iter().copied().collect())
                                 .unwrap_or_default();
 
-                            for topic in primary.into_iter().chain(extras) {
+                            for topic in topics {
                                 if let Some(&shard_uuid) = state.topic_to_shard.get(&topic) {
                                     //use the SHARD's own stream, matching the reliability of the
                                     // incoming client stream.
@@ -393,7 +407,7 @@ pub fn process_network_events(
                             // Subscribe neighbor shard to this client's inputs
                             //  (neighbor starts receiving movement so it can pre-simulate the arriving entity)
                             state
-                                .client_handoff_topics
+                                .client_topics
                                 .entry(client_id)
                                 .or_default()
                                 .insert(neighbor_topic);
@@ -502,19 +516,16 @@ pub fn process_network_events(
                             {
                                 subs.remove(&client_id);
                             }
-                            //state.client_to_topic.remove(&client_id);
-                            state.client_to_topic.insert(client_id, new_auth_topic); // Update primary shard/topic for the client to the new one
 
-                            // Unsubscribe neighbor shard from this client's inputs
-                            if let Some(handoffs) = state.client_handoff_topics.get_mut(&client_id)
-                            {
-                                handoffs.remove(&new_auth_topic);
-                                handoffs.remove(&obsolete_auth_topic);
+                            // Remove the obsolete topic from the client's subscribed topics
+                            if let Some(topics) = state.client_topics.get_mut(&client_id) {
+                                topics.remove(&obsolete_auth_topic);
                             }
+
+                            // Notify the obsolete shard about the client's exit
                             if let Some(&obsolete_uuid) =
                                 state.topic_to_shard.get(&obsolete_auth_topic)
                             {
-                                // Notify the obsolete shard about the client's exit
                                 if let Some(rel_stream) =
                                     state.connection_reliable_streams.get(&obsolete_uuid)
                                 {
@@ -587,6 +598,15 @@ pub fn process_network_events(
                                 );
                             }
                         }
+
+                        BrokerMessage::NewSpawnShard { new_shard_id } => {
+                            info!(
+                                "[BROKER] Shard with ID {:?} becomes the new spawn shard.",
+                                new_shard_id
+                            );
+                            state.default_shard_id = new_shard_id;
+                        }
+
                         _ => {
                             warn!(
                                 "[BROKER] Received unsupported message type from UUID {:?}. Ignoring.",

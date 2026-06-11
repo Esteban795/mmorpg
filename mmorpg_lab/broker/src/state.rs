@@ -22,12 +22,11 @@ pub struct BrokerState {
 
     // Topic -> Set of Client IDs subscribed to that topic
     pub topic_subscribers: HashMap<Topic, HashSet<u32>>,
-    // Client ID -> Topic (shard) they are subscribed to
-    pub client_to_topic: HashMap<u32, Topic>,
+    // Client ID -> Topics (shards) they are subscribed to
+    pub client_topics: HashMap<u32, HashSet<Topic>>,
 
     // Shard routing (Topic -> Shard's with authority Network Uuid)
     pub topic_to_shard: HashMap<Topic, Uuid>,
-    pub client_handoff_topics: HashMap<u32, HashSet<Topic>>,
 
     // Network Identity mapping (Uuid <-> u32)
     pub next_client_id: u32,
@@ -42,13 +41,14 @@ pub struct BrokerState {
 
     // Buffer for incoming data per connection, used to handle partial messages
     pub connection_buffers: HashMap<Uuid, Vec<u8>>,
+    pub default_shard_id: u32
 }
 
 impl Default for BrokerState {
     fn default() -> Self {
         Self {
             topic_subscribers: HashMap::new(),
-            client_to_topic: HashMap::new(),
+            client_topics: HashMap::new(),
             topic_to_shard: HashMap::new(),
             next_client_id: 1, // Start IDs at 1
             uuid_to_id: HashMap::new(),
@@ -56,8 +56,8 @@ impl Default for BrokerState {
             connection_reliable_streams: HashMap::new(),
             connection_unreliable_streams: HashMap::new(),
             spatial_server_uuid: None,
-            client_handoff_topics: HashMap::new(),
             connection_buffers: HashMap::new(),
+            default_shard_id: 0
         }
     }
 }
