@@ -11,6 +11,8 @@ use shared::broker_protocol::{BrokerMessage, string_to_topic};
 use shared::orchestrator_protocol::OrchestratorMessage;
 use std::time::{Duration, Instant};
 
+use shared::{MAP_BOUND_MIN, MAP_SIZE};
+
 #[derive(Copy, Clone, Debug)]
 enum PlayerSplitState {
     EmitCrossingAlert,
@@ -85,10 +87,10 @@ impl SpatialService {
         Self {
             quad_tree: QuadTree::new(
                 Rect {
-                    x: -500.0,
-                    y: -500.0,
-                    width: 1000.0,
-                    height: 1000.0,
+                    x: MAP_BOUND_MIN,
+                    y: MAP_BOUND_MIN,
+                    width: MAP_SIZE,
+                    height: MAP_SIZE,
                 },
                 0,
                 4,

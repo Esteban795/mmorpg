@@ -10,9 +10,16 @@ pub const DEFAULT_REDIS_IP: &str = "redis://127.0.0.1";
 pub const DEFAULT_GATEKEEPER_ADDR_PORT: &str = "127.0.0.1:8080";
 pub const DEFAULT_BROKER_IP: &str = "127.0.0.1";
 pub const DEFAULT_BROKER_PORT: u16 = 10001;
-pub const DEFAULT_ORCHESTRATOR_ADDR : &str = "127.0.0.1";
+pub const DEFAULT_ORCHESTRATOR_ADDR: &str = "127.0.0.1";
 pub const DEFAULT_ORCHESTRATOR_QUIC_PORT: u16 = 10002;
 pub const DEFAULT_ORCH_HEARTBEAT_PORT: u16 = 8000;
+
+// Game Map Boundaries
+pub const MAP_BOUND_MIN: f32 = -2000.0;
+pub const MAP_BOUND_MAX: f32 = 2000.0;
+pub const MAP_SIZE: f32 = 4000.0;
+pub const SPAWN_X: f32 = 32.0;
+pub const SPAWN_Y: f32 = 40.0;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ClientMessage {

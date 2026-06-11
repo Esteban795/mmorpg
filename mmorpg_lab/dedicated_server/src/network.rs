@@ -2,6 +2,7 @@ use bevy::prelude::*;
 use bytes::Bytes;
 use game_sockets::{GameConnection, GameNetworkEvent, GamePeer, GameStream, GameStreamReliability};
 use shared::broker_protocol::{BrokerMessage, InterShardPayload, string_to_topic};
+use shared::{MAP_BOUND_MAX, MAP_BOUND_MIN, SPAWN_X, SPAWN_Y};
 
 use shared::{ClientMessage, PlayerState, ServerMessage};
 use std::collections::HashMap;
@@ -208,7 +209,7 @@ fn handle_broker_message(
                             client_id,
                             PlayerData {
                                 username: clean_username,
-                                position: Vec2::new(-250.0, -250.0),
+                                position: Vec2::new(SPAWN_X, SPAWN_Y),
                                 velocity: Vec2::new(0.0, 0.0),
                                 state: EntityState::Owned,
                             },
@@ -218,7 +219,11 @@ fn handle_broker_message(
                         if let Some(player) = registry.players.get_mut(&client_id) {
                             let speed = 5.0;
                             player.velocity = Vec2::new(x * speed, y * speed);
-                            player.position += player.velocity;
+
+                            player.position.x = (player.position.x + player.velocity.x)
+                                .clamp(MAP_BOUND_MIN, MAP_BOUND_MAX);
+                            player.position.y = (player.position.y + player.velocity.y)
+                                .clamp(MAP_BOUND_MIN, MAP_BOUND_MAX);
 
                             debug!(
                                 "[GAME] Received input from player {} (ID: {}). New position: ({:.2}, {:.2})",
@@ -548,11 +553,11 @@ fn broadcast_aoi(
     mut diagnostics: ResMut<NetworkDiagnostics>,
 ) {
     let Some(broker_conn) = &net.broker_connection else {
-        // debug!("[NETWORK] Cannot broadcast AOI: broker_connection is None");
+        debug!("[NETWORK] Cannot broadcast AOI: broker_connection is None");
         return;
     };
     let Some(unrel_stream) = &net.unreliable_stream else {
-        // debug!("[NETWORK] Cannot broadcast AOI: unreliable_stream is None");
+        debug!("[NETWORK] Cannot broadcast AOI: unreliable_stream is None");
         return;
     };
 
