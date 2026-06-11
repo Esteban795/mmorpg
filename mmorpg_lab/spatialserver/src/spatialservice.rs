@@ -1,6 +1,6 @@
-use game_sockets::{GameConnection, GameStream, GameStreamReliability};
+use game_sockets::{GameStream, GameStreamReliability};
 use std::collections::HashMap;
-use tracing::{debug, error, info, warn};
+use tracing::{error, info, warn};
 
 use crate::quadtree::{QuadTree, SplitData};
 use crate::rect::{Rect, Vec2};
@@ -246,7 +246,6 @@ impl SpatialService {
                             connection.connection_id, inner
                         );
                     }
-                    _ => {} // Ignore other events
                 }
             }
         }
