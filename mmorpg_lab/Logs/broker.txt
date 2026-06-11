@@ -1,58 +1,64 @@
-2026-06-10T18:04:34.533574Z  INFO broker: Broker is running on 0.0.0.0:10001
-2026-06-10T18:04:35.132645Z  INFO broker::routing: [BROKER] New connection: UUID 3dad8b9a-17be-4be5-bccb-f499bb8da607 assigned ID 1
-2026-06-10T18:04:35.132749Z  INFO broker::routing: [BROKER] Reliable stream registered for UUID 3dad8b9a-17be-4be5-bccb-f499bb8da607
-2026-06-10T18:04:35.183174Z  WARN broker::routing: [BROKER] Received unsupported message type from UUID 3dad8b9a-17be-4be5-bccb-f499bb8da607. Ignoring.
-2026-06-10T18:04:35.183261Z  INFO broker::routing: [BROKER] Unreliable stream registered for UUID 3dad8b9a-17be-4be5-bccb-f499bb8da607
-2026-06-10T18:04:36.692109Z  INFO broker::routing: [BROKER] New connection: UUID 8c7e01e8-1694-4b07-b4ba-9d502a1c4260 assigned ID 2
-2026-06-10T18:04:36.692327Z  INFO broker::routing: [BROKER] Reliable stream registered for UUID 8c7e01e8-1694-4b07-b4ba-9d502a1c4260
-2026-06-10T18:04:36.692391Z  INFO broker::routing: [BROKER] Registered spatial server UUID 8c7e01e8-1694-4b07-b4ba-9d502a1c4260
-2026-06-10T18:04:36.692450Z  INFO broker::routing: [BROKER] Client 4294967295 subscribed to topic.
-2026-06-10T18:04:36.692555Z  INFO broker::routing: [BROKER] Client 4294967295 subscribed to topic.
-2026-06-10T18:04:36.692687Z  INFO broker::routing: [BROKER] Unreliable stream registered for UUID 8c7e01e8-1694-4b07-b4ba-9d502a1c4260
-2026-06-10T18:04:52.221042Z  INFO broker::routing: [BROKER] New connection: UUID a8cceb71-93c6-4413-bf6d-b1298eb83053 assigned ID 3
-2026-06-10T18:04:52.221140Z  INFO broker::routing: [BROKER] Reliable stream registered for UUID a8cceb71-93c6-4413-bf6d-b1298eb83053
-2026-06-10T18:04:52.221245Z  INFO broker::routing: [BROKER] Intercepted Join — assigned ID 3 to UUID a8cceb71-93c6-4413-bf6d-b1298eb83053, spawned in shard:0.
-2026-06-10T18:04:52.221335Z  INFO broker::routing: [BROKER] Unreliable stream registered for UUID a8cceb71-93c6-4413-bf6d-b1298eb83053
-2026-06-10T18:04:52.357187Z  INFO broker::routing: [BROKER] Forwarded position update for client 3 to spatial server.
-2026-06-10T18:04:52.374238Z  INFO broker::routing: [BROKER] Client 3 subscribed to topic.
-2026-06-10T18:04:52.561035Z  INFO broker::routing: [BROKER] Forwarded position update for client 3 to spatial server.
-2026-06-10T18:04:52.748307Z  INFO broker::routing: [BROKER] Forwarded position update for client 3 to spatial server.
-2026-06-10T18:04:52.953012Z  INFO broker::routing: [BROKER] Forwarded position update for client 3 to spatial server.
-2026-06-10T18:04:53.158316Z  INFO broker::routing: [BROKER] Forwarded position update for client 3 to spatial server.
-2026-06-10T18:04:53.362018Z  INFO broker::routing: [BROKER] Forwarded position update for client 3 to spatial server.
-2026-06-10T18:04:53.565878Z  INFO broker::routing: [BROKER] Forwarded position update for client 3 to spatial server.
-2026-06-10T18:04:53.770732Z  INFO broker::routing: [BROKER] Forwarded position update for client 3 to spatial server.
-2026-06-10T18:04:53.958120Z  INFO broker::routing: [BROKER] Forwarded position update for client 3 to spatial server.
-2026-06-10T18:04:54.161925Z  INFO broker::routing: [BROKER] Forwarded position update for client 3 to spatial server.
-2026-06-10T18:04:54.365868Z  INFO broker::routing: [BROKER] Forwarded position update for client 3 to spatial server.
-2026-06-10T18:04:54.570662Z  INFO broker::routing: [BROKER] Forwarded position update for client 3 to spatial server.
-2026-06-10T18:04:54.774982Z  INFO broker::routing: [BROKER] Forwarded position update for client 3 to spatial server.
-2026-06-10T18:04:54.961240Z  INFO broker::routing: [BROKER] Forwarded position update for client 3 to spatial server.
-2026-06-10T18:04:55.166158Z  INFO broker::routing: [BROKER] Forwarded position update for client 3 to spatial server.
-2026-06-10T18:04:55.370562Z  INFO broker::routing: [BROKER] Forwarded position update for client 3 to spatial server.
-2026-06-10T18:04:55.574326Z  INFO broker::routing: [BROKER] Forwarded position update for client 3 to spatial server.
-2026-06-10T18:04:55.777747Z  INFO broker::routing: [BROKER] Forwarded position update for client 3 to spatial server.
-2026-06-10T18:04:55.982400Z  INFO broker::routing: [BROKER] Forwarded position update for client 3 to spatial server.
-2026-06-10T18:04:56.170476Z  INFO broker::routing: [BROKER] Forwarded position update for client 3 to spatial server.
-2026-06-10T18:04:56.374612Z  INFO broker::routing: [BROKER] Forwarded position update for client 3 to spatial server.
-2026-06-10T18:04:56.579719Z  INFO broker::routing: [BROKER] Forwarded position update for client 3 to spatial server.
-2026-06-10T18:04:56.783668Z  INFO broker::routing: [BROKER] Forwarded position update for client 3 to spatial server.
-2026-06-10T18:04:56.987202Z  INFO broker::routing: [BROKER] Forwarded position update for client 3 to spatial server.
-2026-06-10T18:04:57.174763Z  INFO broker::routing: [BROKER] Forwarded position update for client 3 to spatial server.
-2026-06-10T18:04:57.379151Z  INFO broker::routing: [BROKER] Forwarded position update for client 3 to spatial server.
-2026-06-10T18:04:57.582345Z  INFO broker::routing: [BROKER] Forwarded position update for client 3 to spatial server.
-2026-06-10T18:04:57.784859Z  INFO broker::routing: [BROKER] Forwarded position update for client 3 to spatial server.
-2026-06-10T18:04:57.989065Z  INFO broker::routing: [BROKER] Forwarded position update for client 3 to spatial server.
-2026-06-10T18:04:58.193228Z  INFO broker::routing: [BROKER] Forwarded position update for client 3 to spatial server.
-2026-06-10T18:04:58.380685Z  INFO broker::routing: [BROKER] Forwarded position update for client 3 to spatial server.
-2026-06-10T18:04:58.584889Z  INFO broker::routing: [BROKER] Forwarded position update for client 3 to spatial server.
-2026-06-10T18:04:58.788095Z  INFO broker::routing: [BROKER] Forwarded position update for client 3 to spatial server.
-2026-06-10T18:04:58.991965Z  INFO broker::routing: [BROKER] Forwarded position update for client 3 to spatial server.
-2026-06-10T18:04:59.195713Z  INFO broker::routing: [BROKER] Forwarded position update for client 3 to spatial server.
-2026-06-10T18:04:59.398887Z  INFO broker::routing: [BROKER] Forwarded position update for client 3 to spatial server.
-2026-06-10T18:04:59.603265Z  INFO broker::routing: [BROKER] Forwarded position update for client 3 to spatial server.
-2026-06-10T18:04:59.790755Z  INFO broker::routing: [BROKER] Forwarded position update for client 3 to spatial server.
-2026-06-10T18:04:59.993571Z  INFO broker::routing: [BROKER] Forwarded position update for client 3 to spatial server.
-2026-06-10T18:05:00.197231Z  INFO broker::routing: [BROKER] Forwarded position update for client 3 to spatial server.
-2026-06-10T18:05:07.556656Z  INFO broker::routing: [BROKER] Client ID 3 (UUID a8cceb71-93c6-4413-bf6d-b1298eb83053) disconnected and cleaned up.
-2026-06-10T18:05:11.475735Z  INFO broker::routing: [BROKER] Client ID 1 (UUID 3dad8b9a-17be-4be5-bccb-f499bb8da607) disconnected and cleaned up.
+2026-06-10T23:46:13.819198Z  INFO broker: Broker is running on 0.0.0.0:10001
+2026-06-10T23:46:14.931013Z  INFO broker::routing: [BROKER] New connection: UUID 038094a0-b0f6-4e81-9d55-e6746a9d2c6a assigned ID 1
+2026-06-10T23:46:14.931149Z  INFO broker::routing: [BROKER] Reliable stream registered for UUID 038094a0-b0f6-4e81-9d55-e6746a9d2c6a
+2026-06-10T23:46:14.982104Z  INFO broker::routing: [BROKER] Shard with UUID 0 reports ready.
+2026-06-10T23:46:14.982202Z  WARN broker::routing: [BROKER] No spatial server UUID registered yet to report shard ready.
+2026-06-10T23:46:14.982282Z  INFO broker::routing: [BROKER] Unreliable stream registered for UUID 038094a0-b0f6-4e81-9d55-e6746a9d2c6a
+2026-06-10T23:46:17.434256Z  INFO broker::routing: [BROKER] New connection: UUID 4845d915-0643-425a-877b-5ec9448ea5e3 assigned ID 2
+2026-06-10T23:46:17.434373Z  INFO broker::routing: [BROKER] Reliable stream registered for UUID 4845d915-0643-425a-877b-5ec9448ea5e3
+2026-06-10T23:46:17.434472Z  INFO broker::routing: [BROKER] Registered spatial server UUID 4845d915-0643-425a-877b-5ec9448ea5e3
+2026-06-10T23:46:17.434595Z  INFO broker::routing: [BROKER] Client 4294967295 subscribed to topic.
+2026-06-10T23:46:17.434683Z  INFO broker::routing: [BROKER] Client 4294967295 subscribed to topic.
+2026-06-10T23:46:17.434760Z  INFO broker::routing: [BROKER] Unreliable stream registered for UUID 4845d915-0643-425a-877b-5ec9448ea5e3
+2026-06-10T23:46:42.851137Z  INFO broker::routing: [BROKER] New connection: UUID c83ad4e4-b83a-4a83-b6de-68ecfdd76bf5 assigned ID 3
+2026-06-10T23:46:42.851285Z  INFO broker::routing: [BROKER] Reliable stream registered for UUID c83ad4e4-b83a-4a83-b6de-68ecfdd76bf5
+2026-06-10T23:46:42.868358Z  INFO broker::routing: [BROKER] Intercepted Join — assigned ID 3 to UUID c83ad4e4-b83a-4a83-b6de-68ecfdd76bf5, spawned in shard:0.
+2026-06-10T23:46:42.868639Z  INFO broker::routing: [BROKER] Unreliable stream registered for UUID c83ad4e4-b83a-4a83-b6de-68ecfdd76bf5
+2026-06-10T23:46:43.954995Z  INFO broker::routing: [BROKER] Client 3 subscribed to topic.
+2026-06-10T23:47:01.240968Z  INFO broker::routing: [BROKER] New connection: UUID 561dde11-d7c2-48d6-9d95-2270858c08e5 assigned ID 4
+2026-06-10T23:47:01.241075Z  INFO broker::routing: [BROKER] Reliable stream registered for UUID 561dde11-d7c2-48d6-9d95-2270858c08e5
+2026-06-10T23:47:01.241192Z  INFO broker::routing: [BROKER] Intercepted Join — assigned ID 4 to UUID 561dde11-d7c2-48d6-9d95-2270858c08e5, spawned in shard:0.
+2026-06-10T23:47:01.241339Z  INFO broker::routing: [BROKER] Unreliable stream registered for UUID 561dde11-d7c2-48d6-9d95-2270858c08e5
+2026-06-10T23:47:05.788851Z  INFO broker::routing: [BROKER] Client 4 subscribed to topic.
+2026-06-10T23:47:12.239874Z  INFO broker::routing: [BROKER] New connection: UUID 8ffc47b1-4ae2-4b13-ab91-6f969e534495 assigned ID 5
+2026-06-10T23:47:12.239981Z  INFO broker::routing: [BROKER] Reliable stream registered for UUID 8ffc47b1-4ae2-4b13-ab91-6f969e534495
+2026-06-10T23:47:12.256885Z  INFO broker::routing: [BROKER] Intercepted Join — assigned ID 5 to UUID 8ffc47b1-4ae2-4b13-ab91-6f969e534495, spawned in shard:0.
+2026-06-10T23:47:12.257062Z  INFO broker::routing: [BROKER] Unreliable stream registered for UUID 8ffc47b1-4ae2-4b13-ab91-6f969e534495
+2026-06-10T23:47:20.434741Z  INFO broker::routing: [BROKER] Client 5 subscribed to topic.
+2026-06-10T23:47:20.486128Z  INFO broker::routing: [BROKER] New connection: UUID 53a798b3-7bfa-48d6-8709-3031918a7c19 assigned ID 6
+2026-06-10T23:47:20.486273Z  INFO broker::routing: [BROKER] Reliable stream registered for UUID 53a798b3-7bfa-48d6-8709-3031918a7c19
+2026-06-10T23:47:20.537036Z  INFO broker::routing: [BROKER] New connection: UUID c57e32ae-b8b5-4627-be07-c5f123487f88 assigned ID 7
+2026-06-10T23:47:20.537213Z  INFO broker::routing: [BROKER] Reliable stream registered for UUID c57e32ae-b8b5-4627-be07-c5f123487f88
+2026-06-10T23:47:20.537312Z  INFO broker::routing: [BROKER] Shard with UUID 1 reports ready.
+2026-06-10T23:47:20.537421Z  INFO broker::routing: [BROKER] Unreliable stream registered for UUID 53a798b3-7bfa-48d6-8709-3031918a7c19
+2026-06-10T23:47:20.570878Z  INFO broker::routing: [BROKER] New connection: UUID e31d3c80-9e4e-4467-a5d7-4bb76010133a assigned ID 8
+2026-06-10T23:47:20.571027Z  INFO broker::routing: [BROKER] Reliable stream registered for UUID e31d3c80-9e4e-4467-a5d7-4bb76010133a
+2026-06-10T23:47:20.587564Z  INFO broker::routing: [BROKER] Shard with UUID 2 reports ready.
+2026-06-10T23:47:20.587705Z  INFO broker::routing: [BROKER] Unreliable stream registered for UUID c57e32ae-b8b5-4627-be07-c5f123487f88
+2026-06-10T23:47:20.605073Z  INFO broker::routing: [BROKER] New connection: UUID 0c4cbc3b-33e7-45e4-bbe5-4934405a3c06 assigned ID 9
+2026-06-10T23:47:20.605337Z  INFO broker::routing: [BROKER] Reliable stream registered for UUID 0c4cbc3b-33e7-45e4-bbe5-4934405a3c06
+2026-06-10T23:47:20.622000Z  INFO broker::routing: [BROKER] Shard with UUID 3 reports ready.
+2026-06-10T23:47:20.622156Z  INFO broker::routing: [BROKER] Unreliable stream registered for UUID e31d3c80-9e4e-4467-a5d7-4bb76010133a
+2026-06-10T23:47:20.639040Z  INFO broker::routing: [BROKER] CrossingAlert — client 3 crossing from shard:0 into shard:1
+2026-06-10T23:47:20.639181Z  INFO broker::routing: [BROKER] CrossingAlert — client 5 crossing from shard:0 into shard:1
+2026-06-10T23:47:20.639280Z  INFO broker::routing: [BROKER] CrossingAlert — client 4 crossing from shard:0 into shard:2
+2026-06-10T23:47:20.655781Z  INFO broker::routing: [BROKER] Shard with UUID 4 reports ready.
+2026-06-10T23:47:20.655922Z  INFO broker::routing: [BROKER] Unreliable stream registered for UUID 0c4cbc3b-33e7-45e4-bbe5-4934405a3c06
+2026-06-10T23:47:20.740639Z  INFO broker::routing: [BROKER] AuthoritySwitch — client 3 authority moving from shard:0 to shard:1
+2026-06-10T23:47:20.740761Z  INFO broker::routing: [BROKER] AuthoritySwitch — client 5 authority moving from shard:0 to shard:1
+2026-06-10T23:47:20.740854Z  INFO broker::routing: [BROKER] AuthoritySwitch — client 4 authority moving from shard:0 to shard:2
+2026-06-10T23:47:20.843397Z  INFO broker::routing: [BROKER] CrossingExit — client 3 exiting shard:0 (now obsolete authority) into shard:1
+2026-06-10T23:47:20.843549Z  INFO broker::routing: [BROKER] CrossingExit — client 5 exiting shard:0 (now obsolete authority) into shard:1
+2026-06-10T23:47:20.843645Z  INFO broker::routing: [BROKER] CrossingExit — client 4 exiting shard:0 (now obsolete authority) into shard:2
+2026-06-10T23:47:21.166367Z  INFO broker::routing: [BROKER] CrossingAlert — client 3 crossing from shard:1 into shard:1
+2026-06-10T23:47:21.166599Z  INFO broker::routing: [BROKER] CrossingExit — client 3 exiting shard:0 (now obsolete authority) into shard:1
+2026-06-10T23:47:24.587943Z  INFO broker::routing: [BROKER] CrossingAlert — client 5 crossing from shard:1 into shard:1
+2026-06-10T23:47:24.588162Z  INFO broker::routing: [BROKER] CrossingExit — client 5 exiting shard:0 (now obsolete authority) into shard:1
+2026-06-10T23:47:28.512093Z  INFO broker::routing: [BROKER] CrossingAlert — client 4 crossing from shard:2 into shard:2
+2026-06-10T23:47:28.512279Z  INFO broker::routing: [BROKER] CrossingAlert — client 4 crossing from shard:2 into shard:4
+2026-06-10T23:47:28.512395Z  INFO broker::routing: [BROKER] CrossingExit — client 4 exiting shard:0 (now obsolete authority) into shard:2
+2026-06-10T23:48:39.773712Z  INFO broker::routing: [BROKER] New connection: UUID 59561f16-9f14-4bd3-aaf4-8077d3306836 assigned ID 10
+2026-06-10T23:48:39.790686Z  INFO broker::routing: [BROKER] Reliable stream registered for UUID 59561f16-9f14-4bd3-aaf4-8077d3306836
+2026-06-10T23:48:39.790890Z  INFO broker::routing: [BROKER] Intercepted Join — assigned ID 10 to UUID 59561f16-9f14-4bd3-aaf4-8077d3306836, spawned in shard:0.
+2026-06-10T23:48:39.791018Z  INFO broker::routing: [BROKER] Unreliable stream registered for UUID 59561f16-9f14-4bd3-aaf4-8077d3306836
+2026-06-10T23:48:43.204797Z  INFO broker::routing: [BROKER] Client 10 subscribed to topic.

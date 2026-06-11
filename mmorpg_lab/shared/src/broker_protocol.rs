@@ -8,6 +8,7 @@ pub const TAG_BROADCAST: u8 = 0x04;
 pub const TAG_CLIENT_INPUT: u8 = 0x05;
 pub const TAG_POSITION_UPDATE: u8 = 0x10;
 pub const TAG_SHARD_READY: u8 = 0x11;
+pub const TAG_NEW_SPAWN_SHARD: u8 = 0x12;
 
 // Spatial Server messages
 pub const TAG_CROSSING_ALERT: u8 = 0x25;
@@ -51,6 +52,9 @@ pub enum BrokerMessage {
     },
     ShardReady {
         shard_id: u32,
+    },
+    NewSpawnShard {
+        new_shard_id: u32,
     },
 
     // Spatial server messages
@@ -159,6 +163,10 @@ impl BrokerMessage {
             BrokerMessage::ShardReady { shard_id } => {
                 buf.put_u8(TAG_SHARD_READY);
                 buf.put_u32_le(*shard_id);
+            }
+            BrokerMessage::NewSpawnShard { new_shard_id } => {
+                buf.put_u8(TAG_NEW_SPAWN_SHARD);
+                buf.put_u32_le(*new_shard_id);
             }
         }
         buf.freeze().to_vec()
@@ -307,6 +315,13 @@ impl BrokerMessage {
                 let shard_id = buf.get_u32_le();
                 Some(BrokerMessage::ShardReady { shard_id })
             }
+            TAG_NEW_SPAWN_SHARD => {
+                if buf.remaining() < 4 {
+                    return None;
+                }
+                let new_shard_id = buf.get_u32_le();
+                Some(BrokerMessage::NewSpawnShard { new_shard_id })
+            }
             _ => None, // Unknown tag
         }
     }
@@ -350,7 +365,8 @@ impl BrokerMessage {
                         u16::from_le_bytes([buffer[offset + 65], buffer[offset + 66]]) as usize;
                     msg_len += 66 + payload_len;
                 }
-                TAG_SHARD_READY => msg_len += 4, // TAG_SHARD_READY
+                TAG_SHARD_READY => msg_len += 4,
+                TAG_NEW_SPAWN_SHARD => msg_len += 4,
                 _ => {
                     buffer.clear();
                     return messages;

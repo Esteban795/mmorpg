@@ -220,7 +220,7 @@ fn handle_broker_message(
                             player.velocity = Vec2::new(x * speed, y * speed);
                             player.position += player.velocity;
 
-                            info!(
+                            debug!(
                                 "[GAME] Received input from player {} (ID: {}). New position: ({:.2}, {:.2})",
                                 player.username, client_id, player.position.x, player.position.y
                             );
@@ -531,7 +531,7 @@ fn broadcast_positions(
     }
 
     if positions_sent > 0 || positions_failed > 0 {
-        info!(
+        debug!(
             "[NETWORK-20Hz] PositionUpdates: {} sent, {} failed",
             positions_sent, positions_failed
         );
@@ -598,7 +598,7 @@ fn broadcast_aoi(
                 warn!("[NETWORK] Failed to publish AOI to Broker: {:?}", e);
                 diagnostics.aoi_broadcasts_failed += 1;
             } else {
-                info!(
+                debug!(
                     "[NETWORK-20Hz] AOI snapshot published: {} players",
                     player_count
                 );

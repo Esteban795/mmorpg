@@ -230,7 +230,7 @@ pub fn process_network_events(
 
                                         //Assign the new player to a default shard/topic for now as a spawn point.
                                         let default_topic = string_to_topic(DEFAULT_TOPIC);
-                                        state.client_to_topic.insert(real_id, default_topic);
+                                        state.client_to_topic.insert(real_id, default_topic); // TODO: shoudl insert in a vec topic
                                         state
                                             .topic_subscribers
                                             .entry(default_topic)
@@ -312,7 +312,7 @@ pub fn process_network_events(
                                     ) {
                                         Ok(_) => {
                                             diagnostics.position_updates_forwarded += 1;
-                                            info!(
+                                            debug!(
                                                 "[BROKER] Forwarded position update for client {} to spatial server.",
                                                 client_id
                                             );
@@ -502,11 +502,13 @@ pub fn process_network_events(
                             {
                                 subs.remove(&client_id);
                             }
-                            state.client_to_topic.remove(&client_id);
+                            //state.client_to_topic.remove(&client_id);
+                            state.client_to_topic.insert(client_id, new_auth_topic); // Update primary shard/topic for the client to the new one
 
                             // Unsubscribe neighbor shard from this client's inputs
                             if let Some(handoffs) = state.client_handoff_topics.get_mut(&client_id)
                             {
+                                handoffs.remove(&new_auth_topic);
                                 handoffs.remove(&obsolete_auth_topic);
                             }
                             if let Some(&obsolete_uuid) =

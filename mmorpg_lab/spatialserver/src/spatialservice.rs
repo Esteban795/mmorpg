@@ -11,18 +11,18 @@ use shared::broker_protocol::{BrokerMessage, string_to_topic};
 use shared::orchestrator_protocol::OrchestratorMessage;
 use std::time::{Duration, Instant};
 
-#[derive(Copy,Clone,Debug)]
+#[derive(Copy, Clone, Debug)]
 enum PlayerSplitState {
     EmitCrossingAlert,
     EmitSwitchAuthority,
     EmitCrossingExit,
 }
 
-#[derive(Copy,Clone,Debug)]
+#[derive(Copy, Clone, Debug)]
 struct PlayerState {
     client_id: u32,
     parent_shard_id: u32,
-    neighbor_shard_id : u32,
+    neighbor_shard_id: u32,
     split_state: PlayerSplitState,
 }
 
@@ -104,10 +104,15 @@ impl SpatialService {
     }
 
     fn process_player_states(&mut self) {
-        let mut pending_delete  = Vec::new();
+        let mut pending_delete = Vec::new();
         for i in 0..self.player_states.len() {
             let player_state = self.player_states.get(i).clone().unwrap();
-            let (client_id, old_shard_id, new_shard_id, split_state) = (player_state.client_id, player_state.parent_shard_id,player_state.neighbor_shard_id, player_state.split_state);
+            let (client_id, old_shard_id, new_shard_id, split_state) = (
+                player_state.client_id,
+                player_state.parent_shard_id,
+                player_state.neighbor_shard_id,
+                player_state.split_state,
+            );
             match split_state {
                 PlayerSplitState::EmitCrossingAlert => {
                     self.emit_crossing_alert(client_id, old_shard_id, new_shard_id);
@@ -476,17 +481,17 @@ impl SpatialService {
                     "Player {} is affected by the split of shard {}, moving it to new shard {}",
                     affected_client, parent_shard_id, new_network_shard
                 );
-                self.player_states.push( PlayerState {
+                self.player_states.push(PlayerState {
                     client_id: affected_client,
-                    parent_shard_id : parent_shard_id,
-                    neighbor_shard_id : new_network_shard,
+                    parent_shard_id: parent_shard_id,
+                    neighbor_shard_id: new_network_shard,
                     split_state: PlayerSplitState::EmitCrossingAlert,
                 });
 
                 // self.send_unsubscribe(affected_client, parent_shard_id);
                 // self.send_subscribe(affected_client, new_network_shard);
-                // self.client_shards
-                //     .insert(affected_client, new_network_shard);
+                self.client_shards
+                    .insert(affected_client, new_network_shard);
 
                 // info!(
                 //     "Player {} successfully transferred from parent {} to child {}",

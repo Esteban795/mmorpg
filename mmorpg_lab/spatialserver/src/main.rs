@@ -5,7 +5,10 @@ pub mod util;
 
 use crate::spatialservice::SpatialService;
 
-use shared::{DEFAULT_BROKER_IP, DEFAULT_BROKER_PORT, DEFAULT_ORCHESTRATOR_ADDR, DEFAULT_ORCHESTRATOR_QUIC_PORT};
+use shared::{
+    DEFAULT_BROKER_IP, DEFAULT_BROKER_PORT, DEFAULT_ORCHESTRATOR_ADDR,
+    DEFAULT_ORCHESTRATOR_QUIC_PORT,
+};
 use tracing::{Level, info};
 use tracing_subscriber::FmtSubscriber;
 
@@ -33,13 +36,18 @@ fn main() {
         .unwrap_or_else(|_| DEFAULT_ORCHESTRATOR_ADDR.to_string())
         .parse()
         .expect("Invalid ORCHESTRATOR_ADDR");
-    
+
     let orchestrator_quic_port: u16 = std::env::var("ORCHESTRATOR_QUIC_PORT")
         .unwrap_or_else(|_| DEFAULT_ORCHESTRATOR_QUIC_PORT.to_string())
         .parse()
         .expect("Invalid ORCHESTRATOR_QUIC_PORT");
 
-    let mut spatial_service = SpatialService::new(&broker_addr, &broker_port, &orchestrator_addr, &orchestrator_quic_port);
+    let mut spatial_service = SpatialService::new(
+        &broker_addr,
+        &broker_port,
+        &orchestrator_addr,
+        &orchestrator_quic_port,
+    );
 
     spatial_service.run();
 }
