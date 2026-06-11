@@ -8,8 +8,6 @@ use shared::broker_protocol::{BrokerMessage, string_to_topic, topic_to_string};
 use shared::{ClientMessage, ServerMessage};
 use tracing::{debug, info, warn};
 
-pub const DEFAULT_TOPIC: &str = "shard:0";
-
 pub fn process_network_events(
     mut network: ResMut<BrokerNetwork>,
     mut state: ResMut<BrokerState>,
@@ -238,7 +236,10 @@ pub fn process_network_events(
                                         }
 
                                         //Assign the new player to a default shard/topic for now as a spawn point.
-                                        let default_topic = string_to_topic(DEFAULT_TOPIC);
+                                        let default_topic = string_to_topic(&format!(
+                                            "shard:{}",
+                                            state.default_shard_id
+                                        ));
                                         state
                                             .client_topics
                                             .entry(real_id)
@@ -251,8 +252,10 @@ pub fn process_network_events(
                                             .insert(real_id);
 
                                         info!(
-                                            "[BROKER] Intercepted Join — assigned ID {} to UUID {:?}, spawned in shard:0.",
-                                            real_id, connection.connection_id
+                                            "[BROKER] Intercepted Join — assigned ID {} to UUID {:?}, spawned in shard:{}.",
+                                            real_id,
+                                            connection.connection_id,
+                                            state.default_shard_id
                                         );
                                     }
                                 } else {
@@ -595,6 +598,15 @@ pub fn process_network_events(
                                 );
                             }
                         }
+
+                        BrokerMessage::NewSpawnShard { new_shard_id } => {
+                            info!(
+                                "[BROKER] Shard with ID {:?} becomes the new spawn shard.",
+                                new_shard_id
+                            );
+                            state.default_shard_id = new_shard_id;
+                        }
+
                         _ => {
                             warn!(
                                 "[BROKER] Received unsupported message type from UUID {:?}. Ignoring.",

@@ -41,6 +41,7 @@ pub struct BrokerState {
 
     // Buffer for incoming data per connection, used to handle partial messages
     pub connection_buffers: HashMap<Uuid, Vec<u8>>,
+    pub default_shard_id: u32
 }
 
 impl Default for BrokerState {
@@ -56,6 +57,7 @@ impl Default for BrokerState {
             connection_unreliable_streams: HashMap::new(),
             spatial_server_uuid: None,
             connection_buffers: HashMap::new(),
+            default_shard_id: 0
         }
     }
 }
