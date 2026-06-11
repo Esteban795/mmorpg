@@ -480,7 +480,7 @@ fn broadcast_network_updates(
     // Flush the buffer if it exceeds a certain size to avoid MTU issues
     let flush_buffer = |buffer: &mut Vec<u8>| {
         if !buffer.is_empty() {
-            info!("[NETWORK] Flushing buffer with {} bytes", buffer.len());
+            // info!("[NETWORK] Flushing buffer with {} bytes", buffer.len());
             let _ = net
                 .peer
                 .send(broker_conn, unrel_stream, Bytes::from(buffer.clone()));
@@ -489,20 +489,31 @@ fn broadcast_network_updates(
     };
 
     // ============ Send Position Updates for the Spatial Server (20Hz) ===========
-    for (client_id, player_data) in &registry.players {
+for (client_id, player_data) in &registry.players {
+        
+        all_players.push(PlayerState {
+            id: *client_id,
+            username: player_data.username.clone(),
+            x: player_data.position.x,
+            y: player_data.position.y,
+        });
+
         if player_data.state == EntityState::Ghost {
-            // Don't send PositionUpdates for ghosts
             continue;
         }
 
-        // Notify the Spatial Server of the exact coordinates
         let pos_update = BrokerMessage::PositionUpdate {
             client_id: *client_id,
             x: player_data.position.x,
             y: player_data.position.y,
         };
 
-        batched_payload.extend_from_slice(&pos_update.to_bytes()); // Add Position Update to batched payload
+        // Petite sécurité MTU au passage : on check AVANT d'ajouter au buffer !
+        let pos_bytes = pos_update.to_bytes();
+        if batched_payload.len() + pos_bytes.len() > 1000 {
+            flush_buffer(&mut batched_payload);
+        }
+        batched_payload.extend_from_slice(&pos_bytes);
         diagnostics.position_updates_attempted += 1;
 
         // --- Handoff Logics : Send GhostUpdates (20Hz) ---
@@ -520,21 +531,14 @@ fn broadcast_network_updates(
                     }
                     .to_bytes(),
                 };
-                batched_payload.extend_from_slice(&msg.to_bytes()); // Add Ghost Update to batched payload
+                
+                let ghost_bytes = msg.to_bytes();
+                if batched_payload.len() + ghost_bytes.len() > 1000 {
+                    flush_buffer(&mut batched_payload);
+                }
+                batched_payload.extend_from_slice(&ghost_bytes);
             }
         }
-
-        // ---- MTU Check : Flush the buffer if adding the next message would exceed the limit ----
-        if batched_payload.len() > 1000 {
-            flush_buffer(&mut batched_payload);
-        }
-
-        all_players.push(PlayerState {
-            id: *client_id,
-            username: player_data.username.clone(),
-            x: player_data.position.x,
-            y: player_data.position.y,
-        });
     }
 
     // Global AOI Snapshot for Clients (20Hz)
@@ -583,163 +587,163 @@ fn network_frame_diagnostic(mut frame_counter: ResMut<NetworkFrameCounter>) {
     // }
 }
 
-// ===================================================================================================================
-// The following functions should probably be removed if broadcast_network_updates works properly, they are left here for reference and debugging purposes.
-// ===================================================================================================================
+// // ===================================================================================================================
+// // The following functions should probably be removed if broadcast_network_updates works properly, they are left here for reference and debugging purposes.
+// // ===================================================================================================================
 
-// -------------------------------------------------------------------------
-// Position Updates (20Hz) - For Spatial Server
-// -------------------------------------------------------------------------
-fn broadcast_positions(
-    net: ResMut<NetworkManager>,
-    registry: Res<PlayerRegistry>,
-    config: Res<ServerConfig>,
-    mut diagnostics: ResMut<NetworkDiagnostics>,
-) {
-    let Some(broker_conn) = &net.broker_connection else {
-        debug!("[NETWORK] Cannot send positions: broker_connection is None");
-        return;
-    };
-    let Some(unrel_stream) = &net.unreliable_stream else {
-        debug!("[NETWORK] Cannot send positions: unreliable_stream is None");
-        return;
-    };
+// // -------------------------------------------------------------------------
+// // Position Updates (20Hz) - For Spatial Server
+// // -------------------------------------------------------------------------
+// fn broadcast_positions(
+//     net: ResMut<NetworkManager>,
+//     registry: Res<PlayerRegistry>,
+//     config: Res<ServerConfig>,
+//     mut diagnostics: ResMut<NetworkDiagnostics>,
+// ) {
+//     let Some(broker_conn) = &net.broker_connection else {
+//         debug!("[NETWORK] Cannot send positions: broker_connection is None");
+//         return;
+//     };
+//     let Some(unrel_stream) = &net.unreliable_stream else {
+//         debug!("[NETWORK] Cannot send positions: unreliable_stream is None");
+//         return;
+//     };
 
-    let my_topic = string_to_topic(&config.zone);
-    let mut positions_sent = 0usize;
-    let mut positions_failed = 0usize;
+//     let my_topic = string_to_topic(&config.zone);
+//     let mut positions_sent = 0usize;
+//     let mut positions_failed = 0usize;
 
-    // ============ Send Position Updates for the Spatial Server (20Hz) ===========
-    for (client_id, player_data) in &registry.players {
-        if player_data.state == EntityState::Ghost {
-            // Don't send PositionUpdates for ghosts
-            continue;
-        }
+//     // ============ Send Position Updates for the Spatial Server (20Hz) ===========
+//     for (client_id, player_data) in &registry.players {
+//         if player_data.state == EntityState::Ghost {
+//             // Don't send PositionUpdates for ghosts
+//             continue;
+//         }
 
-        // Notify the Spatial Server of the exact coordinates
-        let pos_update = BrokerMessage::PositionUpdate {
-            client_id: *client_id,
-            x: player_data.position.x,
-            y: player_data.position.y,
-        };
+//         // Notify the Spatial Server of the exact coordinates
+//         let pos_update = BrokerMessage::PositionUpdate {
+//             client_id: *client_id,
+//             x: player_data.position.x,
+//             y: player_data.position.y,
+//         };
 
-        diagnostics.position_updates_attempted += 1;
-        if let Err(e) = net.peer.send(
-            broker_conn,
-            unrel_stream,
-            Bytes::from(pos_update.to_bytes()),
-        ) {
-            error!(
-                "[NETWORK] Failed to send PositionUpdate for client {}: {:?}",
-                client_id, e
-            );
-            diagnostics.position_updates_failed += 1;
-            positions_failed += 1;
-        } else {
-            positions_sent += 1;
-        }
+//         diagnostics.position_updates_attempted += 1;
+//         if let Err(e) = net.peer.send(
+//             broker_conn,
+//             unrel_stream,
+//             Bytes::from(pos_update.to_bytes()),
+//         ) {
+//             error!(
+//                 "[NETWORK] Failed to send PositionUpdate for client {}: {:?}",
+//                 client_id, e
+//             );
+//             diagnostics.position_updates_failed += 1;
+//             positions_failed += 1;
+//         } else {
+//             positions_sent += 1;
+//         }
 
-        // --- Handoff Logics : Send GhostUpdates (20Hz) ---
-        if let EntityState::PendingHandoff { neighbor_topics } = &player_data.state {
-            let ghost_update_payload = InterShardPayload::GhostUpdate {
-                entity_id: *client_id,
-                pos_x: player_data.position.x,
-                pos_y: player_data.position.y,
-                vel_x: player_data.velocity.x,
-                vel_y: player_data.velocity.y,
-            }
-            .to_bytes();
+//         // --- Handoff Logics : Send GhostUpdates (20Hz) ---
+//         if let EntityState::PendingHandoff { neighbor_topics } = &player_data.state {
+//             let ghost_update_payload = InterShardPayload::GhostUpdate {
+//                 entity_id: *client_id,
+//                 pos_x: player_data.position.x,
+//                 pos_y: player_data.position.y,
+//                 vel_x: player_data.velocity.x,
+//                 vel_y: player_data.velocity.y,
+//             }
+//             .to_bytes();
 
-            for neighbor_topic in neighbor_topics {
-                let msg = BrokerMessage::InterShardMessage {
-                    topic_dest: *neighbor_topic,
-                    topic_from: my_topic,
-                    payload: ghost_update_payload.clone(),
-                };
-                if let Err(e) =
-                    net.peer
-                        .send(broker_conn, unrel_stream, Bytes::from(msg.to_bytes()))
-                {
-                    warn!("[NETWORK] Failed to send GhostUpdate to neighbor: {:?}", e);
-                }
-            }
-        }
-    }
+//             for neighbor_topic in neighbor_topics {
+//                 let msg = BrokerMessage::InterShardMessage {
+//                     topic_dest: *neighbor_topic,
+//                     topic_from: my_topic,
+//                     payload: ghost_update_payload.clone(),
+//                 };
+//                 if let Err(e) =
+//                     net.peer
+//                         .send(broker_conn, unrel_stream, Bytes::from(msg.to_bytes()))
+//                 {
+//                     warn!("[NETWORK] Failed to send GhostUpdate to neighbor: {:?}", e);
+//                 }
+//             }
+//         }
+//     }
 
-    if positions_sent > 0 || positions_failed > 0 {
-        debug!(
-            "[NETWORK-20Hz] PositionUpdates: {} sent, {} failed",
-            positions_sent, positions_failed
-        );
-    }
-}
+//     if positions_sent > 0 || positions_failed > 0 {
+//         debug!(
+//             "[NETWORK-20Hz] PositionUpdates: {} sent, {} failed",
+//             positions_sent, positions_failed
+//         );
+//     }
+// }
 
-// -------------------------------------------------------------------------
-// AOI Broadcast (20Hz) - For Clients
-// -------------------------------------------------------------------------
-fn broadcast_aoi(
-    net: ResMut<NetworkManager>,
-    registry: Res<PlayerRegistry>,
-    config: Res<ServerConfig>,
-    mut diagnostics: ResMut<NetworkDiagnostics>,
-) {
-    let Some(broker_conn) = &net.broker_connection else {
-        debug!("[NETWORK] Cannot broadcast AOI: broker_connection is None");
-        return;
-    };
-    let Some(unrel_stream) = &net.unreliable_stream else {
-        debug!("[NETWORK] Cannot broadcast AOI: unreliable_stream is None");
-        return;
-    };
+// // -------------------------------------------------------------------------
+// // AOI Broadcast (20Hz) - For Clients
+// // -------------------------------------------------------------------------
+// fn broadcast_aoi(
+//     net: ResMut<NetworkManager>,
+//     registry: Res<PlayerRegistry>,
+//     config: Res<ServerConfig>,
+//     mut diagnostics: ResMut<NetworkDiagnostics>,
+// ) {
+//     let Some(broker_conn) = &net.broker_connection else {
+//         debug!("[NETWORK] Cannot broadcast AOI: broker_connection is None");
+//         return;
+//     };
+//     let Some(unrel_stream) = &net.unreliable_stream else {
+//         debug!("[NETWORK] Cannot broadcast AOI: unreliable_stream is None");
+//         return;
+//     };
 
-    let mut all_players = Vec::new();
+//     let mut all_players = Vec::new();
 
-    // ============ Collect all non-ghost players for AOI snapshot ===========
-    for (client_id, player_data) in &registry.players {
-        if player_data.state == EntityState::Ghost {
-            continue;
-        }
+//     // ============ Collect all non-ghost players for AOI snapshot ===========
+//     for (client_id, player_data) in &registry.players {
+//         if player_data.state == EntityState::Ghost {
+//             continue;
+//         }
 
-        all_players.push(PlayerState {
-            id: *client_id,
-            username: player_data.username.clone(),
-            x: player_data.position.x,
-            y: player_data.position.y,
-        });
-    }
+//         all_players.push(PlayerState {
+//             id: *client_id,
+//             username: player_data.username.clone(),
+//             x: player_data.position.x,
+//             y: player_data.position.y,
+//         });
+//     }
 
-    if all_players.is_empty() {
-        return;
-    }
+//     if all_players.is_empty() {
+//         return;
+//     }
 
-    // ============ Publish the Global AOI of this Shard (20Hz) ===========
-    let player_count = all_players.len();
-    let snapshot = ServerMessage::AOISnapshot {
-        players: all_players,
-    };
+//     // ============ Publish the Global AOI of this Shard (20Hz) ===========
+//     let player_count = all_players.len();
+//     let snapshot = ServerMessage::AOISnapshot {
+//         players: all_players,
+//     };
 
-    match bincode::serialize(&snapshot) {
-        Ok(payload) => {
-            let publish_msg = BrokerMessage::Publish {
-                topic: string_to_topic(&config.zone),
-                payload,
-            };
+//     match bincode::serialize(&snapshot) {
+//         Ok(payload) => {
+//             let publish_msg = BrokerMessage::Publish {
+//                 topic: string_to_topic(&config.zone),
+//                 payload,
+//             };
 
-            diagnostics.aoi_broadcasts_sent += 1;
-            if let Err(e) = net.peer.send(
-                broker_conn,
-                unrel_stream,
-                Bytes::from(publish_msg.to_bytes()),
-            ) {
-                warn!("[NETWORK] Failed to publish AOI to Broker: {:?}", e);
-                diagnostics.aoi_broadcasts_failed += 1;
-            } else {
-                debug!(
-                    "[NETWORK-20Hz] AOI snapshot published: {} players",
-                    player_count
-                );
-            }
-        }
-        Err(e) => error!("Failed to serialize AOI Snapshot: {:?}", e),
-    }
-}
+//             diagnostics.aoi_broadcasts_sent += 1;
+//             if let Err(e) = net.peer.send(
+//                 broker_conn,
+//                 unrel_stream,
+//                 Bytes::from(publish_msg.to_bytes()),
+//             ) {
+//                 warn!("[NETWORK] Failed to publish AOI to Broker: {:?}", e);
+//                 diagnostics.aoi_broadcasts_failed += 1;
+//             } else {
+//                 debug!(
+//                     "[NETWORK-20Hz] AOI snapshot published: {} players",
+//                     player_count
+//                 );
+//             }
+//         }
+//         Err(e) => error!("Failed to serialize AOI Snapshot: {:?}", e),
+//     }
+// }
