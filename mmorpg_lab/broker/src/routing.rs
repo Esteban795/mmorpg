@@ -99,6 +99,20 @@ pub fn process_network_events(
                                 subs.remove(&id);
                             }
                         }
+
+                        if let Some(spatial_server_uuid) = state.spatial_server_uuid {
+                            if let Some(spatial_stream) =
+                                state.connection_reliable_streams.get(&spatial_server_uuid)
+                            {
+                                let disconnect_msg = BrokerMessage::PlayerDisconnected { client_id: id }.to_bytes();
+                                let _ = network.peer.send(
+                                    &spatial_server_uuid.into(),
+                                    spatial_stream,
+                                    Bytes::from(disconnect_msg),
+                                );
+                            }
+                        }
+
                     }
                     info!(
                         "[BROKER] Client ID {} (UUID {:?}) disconnected and cleaned up.",
