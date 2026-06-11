@@ -489,8 +489,7 @@ fn broadcast_network_updates(
     };
 
     // ============ Send Position Updates for the Spatial Server (20Hz) ===========
-for (client_id, player_data) in &registry.players {
-        
+    for (client_id, player_data) in &registry.players {
         all_players.push(PlayerState {
             id: *client_id,
             username: player_data.username.clone(),
@@ -531,7 +530,7 @@ for (client_id, player_data) in &registry.players {
                     }
                     .to_bytes(),
                 };
-                
+
                 let ghost_bytes = msg.to_bytes();
                 if batched_payload.len() + ghost_bytes.len() > 1000 {
                     flush_buffer(&mut batched_payload);
@@ -543,9 +542,9 @@ for (client_id, player_data) in &registry.players {
 
     // Global AOI Snapshot for Clients (20Hz)
     if !all_players.is_empty() {
-        // Make chunks of 30 players to avoid MTU issues with the AOI snapshot
+        // Make chunks of 15 players to avoid MTU issues with the AOI snapshot
         // (can be optimized by sending a single snapshot with multiple players instead of multiple snapshots)
-        for chunk in all_players.chunks(30) {
+        for chunk in all_players.chunks(15) {
             let snapshot = ServerMessage::AOISnapshot {
                 players: chunk.to_vec(),
             };

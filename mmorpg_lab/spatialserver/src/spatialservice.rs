@@ -100,7 +100,7 @@ impl SpatialService {
                     height: MAP_SIZE,
                 },
                 0,
-                1,
+                4,
                 2,
                 0,
             ),
