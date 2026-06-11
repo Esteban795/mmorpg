@@ -62,8 +62,9 @@ impl Plugin for NetworkPlugin {
                 Update,
                 (
                     poll_network_events,
-                    broadcast_positions,
-                    broadcast_aoi,
+                    // broadcast_positions,
+                    // broadcast_aoi,
+                    broadcast_network_updates,
                     network_frame_diagnostic,
                 )
                     .chain(),
@@ -456,6 +457,118 @@ fn send_inter_shard(
     let _ = net.peer.send(conn, stream, Bytes::from(msg.to_bytes()));
 }
 
+fn broadcast_network_updates(
+    net: ResMut<NetworkManager>,
+    registry: Res<PlayerRegistry>,
+    config: Res<ServerConfig>,
+    mut diagnostics: ResMut<NetworkDiagnostics>,
+) {
+    let Some(broker_conn) = &net.broker_connection else {
+        debug!("[NETWORK] Cannot send positions: broker_connection is None");
+        return;
+    };
+    let Some(unrel_stream) = &net.unreliable_stream else {
+        debug!("[NETWORK] Cannot send positions: unreliable_stream is None");
+        return;
+    };
+    let my_topic = string_to_topic(&config.zone);
+
+    // Message Buffer
+    let mut batched_payload = Vec::new();
+    let mut all_players = Vec::new();
+
+    // Flush the buffer if it exceeds a certain size to avoid MTU issues
+    let flush_buffer = |buffer: &mut Vec<u8>| {
+        if !buffer.is_empty() {
+            info!("[NETWORK] Flushing buffer with {} bytes", buffer.len());
+            let _ = net
+                .peer
+                .send(broker_conn, unrel_stream, Bytes::from(buffer.clone()));
+            buffer.clear();
+        }
+    };
+
+    // ============ Send Position Updates for the Spatial Server (20Hz) ===========
+    for (client_id, player_data) in &registry.players {
+        if player_data.state == EntityState::Ghost {
+            // Don't send PositionUpdates for ghosts
+            continue;
+        }
+
+        // Notify the Spatial Server of the exact coordinates
+        let pos_update = BrokerMessage::PositionUpdate {
+            client_id: *client_id,
+            x: player_data.position.x,
+            y: player_data.position.y,
+        };
+
+        batched_payload.extend_from_slice(&pos_update.to_bytes()); // Add Position Update to batched payload
+        diagnostics.position_updates_attempted += 1;
+
+        // --- Handoff Logics : Send GhostUpdates (20Hz) ---
+        if let EntityState::PendingHandoff { neighbor_topics } = &player_data.state {
+            for neighbor_topic in neighbor_topics {
+                let msg = BrokerMessage::InterShardMessage {
+                    topic_dest: *neighbor_topic,
+                    topic_from: my_topic,
+                    payload: InterShardPayload::GhostUpdate {
+                        entity_id: *client_id,
+                        pos_x: player_data.position.x,
+                        pos_y: player_data.position.y,
+                        vel_x: player_data.velocity.x,
+                        vel_y: player_data.velocity.y,
+                    }
+                    .to_bytes(),
+                };
+                batched_payload.extend_from_slice(&msg.to_bytes()); // Add Ghost Update to batched payload
+            }
+        }
+
+        // ---- MTU Check : Flush the buffer if adding the next message would exceed the limit ----
+        if batched_payload.len() > 1000 {
+            flush_buffer(&mut batched_payload);
+        }
+
+        all_players.push(PlayerState {
+            id: *client_id,
+            username: player_data.username.clone(),
+            x: player_data.position.x,
+            y: player_data.position.y,
+        });
+    }
+
+    // Global AOI Snapshot for Clients (20Hz)
+    if !all_players.is_empty() {
+        // Make chunks of 30 players to avoid MTU issues with the AOI snapshot
+        // (can be optimized by sending a single snapshot with multiple players instead of multiple snapshots)
+        for chunk in all_players.chunks(30) {
+            let snapshot = ServerMessage::AOISnapshot {
+                players: chunk.to_vec(),
+            };
+
+            if let Ok(aoi_bytes) = bincode::serialize(&snapshot) {
+                let publish_msg = BrokerMessage::Publish {
+                    topic: my_topic,
+                    payload: aoi_bytes,
+                };
+
+                let msg_bytes = publish_msg.to_bytes();
+
+                // Flush the buffer if adding this AOI snapshot would exceed the MTU limit
+                if batched_payload.len() + msg_bytes.len() > 1000 {
+                    flush_buffer(&mut batched_payload);
+                }
+
+                batched_payload.extend_from_slice(&msg_bytes);
+                diagnostics.aoi_broadcasts_sent += 1;
+            }
+        }
+    }
+
+    // Final flush for any remaining messages in the buffer
+    flush_buffer(&mut batched_payload);
+}
+
 // -------------------------------------------------------------------------
 // Position Updates (20Hz) - For Spatial Server
 // -------------------------------------------------------------------------
@@ -466,11 +579,11 @@ fn broadcast_positions(
     mut diagnostics: ResMut<NetworkDiagnostics>,
 ) {
     let Some(broker_conn) = &net.broker_connection else {
-        // debug!("[NETWORK] Cannot send positions: broker_connection is None");
+        debug!("[NETWORK] Cannot send positions: broker_connection is None");
         return;
     };
     let Some(unrel_stream) = &net.unreliable_stream else {
-        // debug!("[NETWORK] Cannot send positions: unreliable_stream is None");
+        debug!("[NETWORK] Cannot send positions: unreliable_stream is None");
         return;
     };
 

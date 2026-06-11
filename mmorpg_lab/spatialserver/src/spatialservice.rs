@@ -1,6 +1,6 @@
 use game_sockets::{GameConnection, GameStream, GameStreamReliability};
 use std::collections::HashMap;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::quadtree::{QuadTree, SplitData};
 use crate::rect::{Rect, Vec2};
@@ -225,7 +225,7 @@ impl SpatialService {
                         stream,
                         data,
                     } => {
-                        info!(
+                        debug!(
                             " Message received from broker {:?} on stream {:?}: {} bytes",
                             connection.connection_id,
                             stream,
