@@ -28,7 +28,7 @@ struct PlayerState {
     split_state: PlayerSplitState,
 }
 
-const MARGIN: f32 = 50.0;
+const MARGIN: f32 = 200.0;
 pub struct QuicConnection {
     pub peer: GamePeer,
     pub connection: Option<game_sockets::GameConnection>,
@@ -96,7 +96,7 @@ impl SpatialService {
                     height: MAP_SIZE,
                 },
                 0,
-                4,
+                1,
                 2,
                 0,
             ),
@@ -324,10 +324,10 @@ impl SpatialService {
     fn handle_broker_message(&mut self, message: BrokerMessage) {
         match message {
             BrokerMessage::PositionUpdate { client_id, x, y } => {
-                info!(
-                    "Received PositionUpdate from broker for client {}: x={}, y={}",
-                    client_id, x, y
-                );
+                // info!(
+                //     "Received PositionUpdate from broker for client {}: x={}, y={}",
+                //     client_id, x, y
+                // );
                 self.handle_position_update(client_id, Vec2 { x, y });
             }
             BrokerMessage::ShardReady { shard_id } => {
@@ -360,7 +360,7 @@ impl SpatialService {
 
     pub fn run(&mut self) {
         let mut last_10hz_tick = Instant::now();
-        let interval_10hz = Duration::from_millis(100);
+        let interval_10hz = Duration::from_millis(500);
 
         loop {
             self.poll_broker_events();
@@ -386,7 +386,6 @@ impl SpatialService {
             // if insertion required a split, it will NOT send anything on the network before orchestrator tells us the new shard is ready
             if old_network_shard != Some(result.network_shard_id) {
                 if let Some(old) = old_network_shard {
-                    // On regarde si on avait anticipé ce changement (est-ce que le nouveau shard était dans la marge ?)
                     let old_nearby = self
                         .client_crossing_state
                         .get(&client_id)
@@ -394,28 +393,22 @@ impl SpatialService {
                         .unwrap_or_default();
 
                     if old_nearby.contains(&result.network_shard_id) {
-                        // Le joueur a traversé normalement, la CrossingAlert est déjà partie depuis longtemps. On Switch !
                         info!("Normal border cross for {}", client_id);
                         self.emit_switch_authority(client_id, old, result.network_shard_id);
                     } else {
-                        // LE JOUEUR S'EST TÉLÉPORTÉ (ou a sauté la marge) !
-                        // On force la procédure complète de Handoff via la file d'attente.
                         info!(
                             "Player {} teleported to {}, forcing safe handoff sequence!",
                             client_id, result.network_shard_id
                         );
-                        self.player_states.push(PlayerState {
-                            client_id,
-                            parent_shard_id: old,
-                            neighbor_shard_id: result.network_shard_id,
-                            split_state: PlayerSplitState::EmitCrossingAlert,
-                        });
+                        self.emit_crossing_alert(client_id, old, result.network_shard_id);
+                        self.emit_switch_authority(client_id, old, result.network_shard_id);
+                        self.emit_crossing_exit(client_id, old, result.network_shard_id);
                     }
                 } else {
                     // New player, just subscribe to the new shard
                     info!(
-                        "New player {} inserted in shard {}, subscribing to it",
-                        client_id, result.network_shard_id
+                        "New player {} inserted in shard {}, at pos {} {}, subscribing to it",
+                        client_id, result.network_shard_id, pos.x, pos.y
                     );
                     self.send_subscribe(client_id, result.network_shard_id);
 
@@ -501,26 +494,18 @@ impl SpatialService {
             // Partial mass handoff : only move players that are in this shard, old shard is still active and can serve players that are not in the new shard
             for (affected_client, new_network_shard) in updates {
                 info!(
-                    "Player {} is affected by the split of shard {}, moving it to new shard {}",
+                    "Transferring player {} from {} to {}",
                     affected_client, parent_shard_id, new_network_shard
                 );
-                self.player_states.push(PlayerState {
-                    client_id: affected_client,
-                    parent_shard_id: parent_shard_id,
-                    neighbor_shard_id: new_network_shard,
-                    split_state: PlayerSplitState::EmitCrossingAlert,
-                });
 
-                // self.send_unsubscribe(affected_client, parent_shard_id);
-                // self.send_subscribe(affected_client, new_network_shard);
+                self.emit_crossing_alert(affected_client, parent_shard_id, new_network_shard);
+                self.emit_switch_authority(affected_client, parent_shard_id, new_network_shard);
+                self.emit_crossing_exit(affected_client, parent_shard_id, new_network_shard);
+
                 self.client_shards
                     .insert(affected_client, new_network_shard);
                 self.client_crossing_state
                     .insert(affected_client, vec![new_network_shard]);
-                // info!(
-                //     "Player {} successfully transferred from parent {} to child {}",
-                //     affected_client, parent_shard_id, new_network_shard
-                // );
             }
         } else {
             warn!(
