@@ -7,6 +7,8 @@ use std::collections::HashMap;
 use crate::network::ClientNetworkManager;
 use crate::state::AppState;
 
+use shared::MAP_SIZE;
+
 pub struct GamePlugin;
 
 #[derive(Resource, Default)]
@@ -40,7 +42,7 @@ fn setup_map(mut commands: Commands) {
     commands.spawn((
         Sprite {
             color: Color::srgb(0.2, 0.5, 0.2),
-            custom_size: Some(Vec2::new(800.0, 800.0)),
+            custom_size: Some(Vec2::new(MAP_SIZE, MAP_SIZE)),
             ..default()
         },
         Transform::from_xyz(0.0, 0.0, -1.0),
@@ -56,10 +58,10 @@ fn player_input(
     let mut y = 0.0;
 
     if keyboard.pressed(KeyCode::KeyW) || keyboard.pressed(KeyCode::ArrowUp) {
-        y += 1.0;
+        y -= 1.0;
     }
     if keyboard.pressed(KeyCode::KeyS) || keyboard.pressed(KeyCode::ArrowDown) {
-        y -= 1.0;
+        y += 1.0;
     }
     if keyboard.pressed(KeyCode::KeyA) || keyboard.pressed(KeyCode::ArrowLeft) {
         x -= 1.0;
@@ -114,10 +116,11 @@ fn move_camera(
 fn smooth_movement(time: Res<Time>, mut query: Query<(&mut Transform, &TargetPosition)>) {
     // the higher the lerp_factor, the snappier the movement (less interpolation).
     // The lower, the smoother but more delayed. We can adjust it based on the network conditions or player preferences.
-    let lerp_factor = 15.0 * time.delta_secs();
+    let lerp_factor = 10.0 * time.delta_secs();
 
     for (mut transform, target) in &mut query {
-        let target_vec = Vec3::new(target.x, target.y, transform.translation.z);
+        let target_y = target.y;
+        let target_vec = Vec3::new(target.x, -target_y, transform.translation.z);
 
         // Interpolate the current position towards the target position using linear interpolation (lerp)
         transform.translation = transform.translation.lerp(target_vec, lerp_factor);
