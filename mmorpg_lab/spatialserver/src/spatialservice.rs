@@ -42,6 +42,10 @@ pub struct SpatialService {
     client_shards: HashMap<u32, u32>, // client_id -> shard_id
     client_crossing_state: HashMap<u32, Vec<u32>>,
     player_states: Vec<PlayerState>,
+
+    spawn_shard_id : u32,
+    spawn_point: Vec2,
+
     // QUIC connections to the broker & orchestrator
     pub quic_broker: Option<QuicConnection>,
     pub quic_orchestrator: Option<QuicConnection>,
@@ -105,6 +109,11 @@ impl SpatialService {
             quic_orchestrator: quic_orchestrator,
             client_crossing_state: HashMap::new(),
             player_states: Vec::new(),
+            spawn_point: Vec2 {
+                x: shared::SPAWN_X,
+                y: shared::SPAWN_Y,
+            },
+            spawn_shard_id: 0,
         }
     }
 
@@ -428,6 +437,18 @@ impl SpatialService {
                     split_data.parent_shard_id
                 );
                 self.request_orchestrator_split(split_data);
+
+                let new_spawn_shard_id_opt = self.quad_tree.shard_for(&self.spawn_point);
+                if let Some(new_spawn_shard_id) = new_spawn_shard_id_opt {
+                    if new_spawn_shard_id != self.spawn_shard_id {
+                        info!(
+                            "Spawn shard has changed from {} to {} after split, notifying broker",
+                            self.spawn_shard_id, new_spawn_shard_id
+                        );
+                        self.spawn_shard_id = new_spawn_shard_id;
+                        self.send_new_spawn_shard(new_spawn_shard_id);
+                    }
+                }
             }
 
             // Crossing alert check :
@@ -656,6 +677,27 @@ impl SpatialService {
                             error!(
                                 " Failed to send crossing exit message for client {}: {:?}",
                                 client_id, e
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn send_new_spawn_shard(&self, new_shard_id: u32) {
+        info!(new_shard_id, "New spawn shard after split");
+
+        let msg = BrokerMessage::NewSpawnShard { new_shard_id };
+
+        if let Some(broker) = &self.quic_broker {
+            if let Some(peer) = Some(&broker.peer) {
+                if let Some(connection) = &broker.connection {
+                    if let Some(stream) = &broker.reliable_stream {
+                        if let Err(e) = peer.send(connection, stream, Bytes::from(msg.to_bytes())) {
+                            error!(
+                                " Failed to send new spawn shard message for shard {}: {:?}",
+                                new_shard_id, e
                             );
                         }
                     }
