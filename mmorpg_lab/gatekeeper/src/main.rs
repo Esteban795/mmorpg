@@ -1,14 +1,12 @@
 mod handlers;
-mod redis_pool;
 
 use axum::{Router, routing::get, routing::post};
 use handlers::{health_handler, login_handler};
 
 //use redis_pool::ApiState;
+use shared::{DEFAULT_BROKER_IP, DEFAULT_BROKER_PORT, DEFAULT_GATEKEEPER_ADDR_PORT};
 use tracing::{Level, error, info};
 use tracing_subscriber::FmtSubscriber;
-use shared::{DEFAULT_GATEKEEPER_ADDR_PORT, DEFAULT_BROKER_IP, DEFAULT_BROKER_PORT};
-
 
 #[derive(Clone)]
 pub struct ApiState {
@@ -16,10 +14,8 @@ pub struct ApiState {
     pub broker_port: u16,
 }
 
-
 #[tokio::main]
 async fn main() {
-
     let subscriber = FmtSubscriber::builder()
         .with_max_level(Level::INFO)
         .finish();
@@ -31,33 +27,22 @@ async fn main() {
 
     //let redis_ip = std::env::var("REDIS_IP").unwrap_or_else(|_| DEFAULT_REDIS_IP.to_string());
 
-    let listen_addr =
-        std::env::var("GATEKEEPER_ADDR_PORT").unwrap_or_else(|_| DEFAULT_GATEKEEPER_ADDR_PORT.to_string());
+    let listen_addr = std::env::var("GATEKEEPER_ADDR_PORT")
+        .unwrap_or_else(|_| DEFAULT_GATEKEEPER_ADDR_PORT.to_string());
 
-    
-    let broker_ip = std::env::var("BROKER_IP")
-        .unwrap_or_else(|_| DEFAULT_BROKER_IP.to_string());
-        
+    let broker_ip = std::env::var("BROKER_IP").unwrap_or_else(|_| DEFAULT_BROKER_IP.to_string());
+
     let broker_port: u16 = std::env::var("BROKER_PORT")
-        .map(|p| p.parse().expect("Fatal error: BROKER_PORT must be a valid number"))
+        .map(|p| {
+            p.parse()
+                .expect("Fatal error: BROKER_PORT must be a valid number")
+        })
         .unwrap_or(DEFAULT_BROKER_PORT);
 
-    let state = ApiState { 
-        broker_ip, 
-        broker_port 
+    let state = ApiState {
+        broker_ip,
+        broker_port,
     };
-
-
-    // // Connect to Redis
-    // let Ok(redis_conn) = shared::init_redis(&format!("{}", redis_ip)).await else {
-    //     error!(
-    //         "Fatal error: could not connect to Redis. Make sure Redis is running and accessible at {}",
-    //         redis_ip
-    //     );
-    //     return;
-    // };
-
-    // let state = ApiState { redis_conn };
 
     let app = Router::new()
         .route("/login", post(login_handler))

@@ -340,6 +340,17 @@ impl SpatialService {
                     self.handle_shard_ready(shard_id);
                     self.quad_tree.print_state();
                 }
+                BrokerMessage::PlayerDisconnected { client_id } => {
+                    info!(
+                        "Received PlayerDisconnected from broker for client {}: removing it from quadtree and cleaning up state",
+                        client_id
+                    );
+                    self.quad_tree.print_state();
+                    self.quad_tree.remove_player(client_id);
+                    self.client_shards.remove(&client_id);
+                    self.client_crossing_state.remove(&client_id);
+                    self.quad_tree.print_state();
+                }
                 _ => {
                     warn!(
                         "Received unsupported message type from client: {:?}",

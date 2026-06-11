@@ -9,6 +9,7 @@ pub const TAG_CLIENT_INPUT: u8 = 0x05;
 pub const TAG_POSITION_UPDATE: u8 = 0x10;
 pub const TAG_SHARD_READY: u8 = 0x11;
 pub const TAG_NEW_SPAWN_SHARD: u8 = 0x12;
+pub const TAG_PLAYER_DISCONNECTED: u8 = 0x13;
 
 // Spatial Server messages
 pub const TAG_CROSSING_ALERT: u8 = 0x25;
@@ -33,6 +34,9 @@ pub enum BrokerMessage {
     Unsubscribe {
         client_id: u32,
         topic: [u8; 32],
+    },
+    PlayerDisconnected {
+        client_id: u32,
     },
     Publish {
         topic: [u8; 32],
@@ -167,6 +171,10 @@ impl BrokerMessage {
             BrokerMessage::NewSpawnShard { new_shard_id } => {
                 buf.put_u8(TAG_NEW_SPAWN_SHARD);
                 buf.put_u32_le(*new_shard_id);
+            }
+            BrokerMessage::PlayerDisconnected { client_id } => {
+                buf.put_u8(TAG_PLAYER_DISCONNECTED);
+                buf.put_u32_le(*client_id);
             }
         }
         buf.freeze().to_vec()
@@ -322,6 +330,13 @@ impl BrokerMessage {
                 let new_shard_id = buf.get_u32_le();
                 Some(BrokerMessage::NewSpawnShard { new_shard_id })
             }
+            TAG_PLAYER_DISCONNECTED => {
+                if buf.remaining() < 4 {
+                    return None;
+                }
+                let client_id = buf.get_u32_le();
+                Some(BrokerMessage::PlayerDisconnected { client_id })
+            }
             _ => None, // Unknown tag
         }
     }
@@ -367,6 +382,7 @@ impl BrokerMessage {
                 }
                 TAG_SHARD_READY => msg_len += 4,
                 TAG_NEW_SPAWN_SHARD => msg_len += 4,
+                TAG_PLAYER_DISCONNECTED => msg_len += 4,
                 _ => {
                     buffer.clear();
                     return messages;

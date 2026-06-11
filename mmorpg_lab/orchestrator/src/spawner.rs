@@ -6,12 +6,12 @@ use tokio::sync::mpsc;
 use tracing::{error, info};
 
 //Settings for the spawner. Adjust as needed for testing or production.
-const HOT_SERVERS_MIN: usize = 1;
+// const HOT_SERVERS_MIN: usize = 1;
 const MAX_PLAYERS_PER_SERVER: u16 = 2;
 const STARTING_PORT: u16 = 8001;
 const MAX_PORT: u16 = 9000;
-const TICKING_INTERVAL_SECS: u64 = 5;
-const BOOT_TIMEOUT_SECS: u64 = 20;
+// const TICKING_INTERVAL_SECS: u64 = 5;
+// const BOOT_TIMEOUT_SECS: u64 = 20;
 
 pub async fn maintain_hot_servers(mut spawn_rx: mpsc::UnboundedReceiver<u32>) {
     info!("Lazy Spawner started. Booting default lobby (shard:0)...");

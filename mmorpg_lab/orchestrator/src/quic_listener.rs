@@ -81,7 +81,7 @@ impl QuicOrchestrator {
                             "Received message on stream {:?} for connection {:?}: {:?}",
                             stream, connection, data
                         );
-                        self.handle_message(&connection, &data);
+                        self.handle_message(&data);
                     }
                     GameNetworkEvent::Error { connection, inner } => {
                         warn!(
@@ -94,11 +94,11 @@ impl QuicOrchestrator {
         }
     }
 
-    fn handle_message(&mut self, conn: &GameConnection, data: &[u8]) {
+    fn handle_message(&mut self, data: &[u8]) {
         if let Some(message) = OrchestratorMessage::from_bytes(data) {
             match message {
                 OrchestratorMessage::RequestSplit {
-                    shard_id,
+                    shard_id: _,
                     new_shards_ids,
                 } => {
                     for new_id in new_shards_ids {
