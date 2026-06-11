@@ -34,6 +34,7 @@ pub struct QuicConnection {
     pub connection: Option<game_sockets::GameConnection>,
     pub reliable_stream: Option<GameStream>,
     pub unreliable_stream: Option<GameStream>,
+    pub buffer: Vec<u8>,
 }
 
 pub struct SpatialService {
@@ -75,6 +76,7 @@ impl SpatialService {
             connection: None,
             reliable_stream: None,
             unreliable_stream: None,
+            buffer: Vec::new(),
         });
 
         let quic_orchestrator = Some(QuicConnection {
@@ -82,6 +84,7 @@ impl SpatialService {
             connection: None,
             reliable_stream: None,
             unreliable_stream: None,
+            buffer: Vec::new(),
         });
 
         Self {
@@ -138,7 +141,8 @@ impl SpatialService {
 
     // NETWORK HANDLING : POLL QUIC CONNECTIONS AND DISPATCH MESSAGES TO APPROPRIATE HANDLERS
     fn poll_broker_events(&mut self) {
-        let mut messages_to_process: Vec<(GameConnection, Bytes)> = Vec::new();
+        let mut parsed_messages = Vec::new();
+
         if let Some(quic_broker) = &mut self.quic_broker {
             while let Ok(Some(event)) = quic_broker.peer.poll() {
                 match event {
@@ -220,18 +224,12 @@ impl SpatialService {
                             return;
                         }
                     }
-                    GameNetworkEvent::Message {
-                        connection,
-                        stream,
-                        data,
-                    } => {
-                        debug!(
-                            " Message received from broker {:?} on stream {:?}: {} bytes",
-                            connection.connection_id,
-                            stream,
-                            data.len()
-                        );
-                        messages_to_process.push((connection, data));
+                    GameNetworkEvent::Message { data, .. } => {
+                        // Parse all incoming messages from the broker connection first
+                        quic_broker.buffer.extend_from_slice(&data);
+
+                        let mut msgs = BrokerMessage::parse_multiple(&mut quic_broker.buffer);
+                        parsed_messages.append(&mut msgs);
                     }
                     GameNetworkEvent::Error { connection, inner } => {
                         warn!(
@@ -239,12 +237,13 @@ impl SpatialService {
                             connection.connection_id, inner
                         );
                     }
+                    _ => {} // Ignore other events
                 }
             }
         }
 
-        for (connection, data) in messages_to_process {
-            self.handle_broker_message(&connection, &data);
+        for message in parsed_messages {
+            self.handle_broker_message(message);
         }
     }
 
@@ -322,48 +321,40 @@ impl SpatialService {
         }
     }
 
-    fn handle_broker_message(&mut self, connection: &game_sockets::GameConnection, data: &[u8]) {
-        if let Some(message) = BrokerMessage::from_bytes(data) {
-            match message {
-                BrokerMessage::PositionUpdate { client_id, x, y } => {
-                    info!(
-                        "Received PositionUpdate from broker for client {}: x={}, y={}",
-                        client_id, x, y
-                    );
-                    self.handle_position_update(client_id, Vec2 { x, y });
-                }
-                BrokerMessage::ShardReady { shard_id } => {
-                    info!(
-                        "Received ShardReady from broker for shard {}: activating it and migrating affected players if necessary",
-                        shard_id
-                    );
-                    self.handle_shard_ready(shard_id);
-                    self.quad_tree.print_state();
-                }
-                BrokerMessage::PlayerDisconnected { client_id } => {
-                    info!(
-                        "Received PlayerDisconnected from broker for client {}: removing it from quadtree and cleaning up state",
-                        client_id
-                    );
-                    self.quad_tree.print_state();
-                    self.quad_tree.remove_player(client_id);
-                    self.client_shards.remove(&client_id);
-                    self.client_crossing_state.remove(&client_id);
-                    self.quad_tree.print_state();
-                }
-                _ => {
-                    warn!(
-                        "Received unsupported message type from client: {:?}",
-                        message
-                    );
-                }
+    fn handle_broker_message(&mut self, message: BrokerMessage) {
+        match message {
+            BrokerMessage::PositionUpdate { client_id, x, y } => {
+                info!(
+                    "Received PositionUpdate from broker for client {}: x={}, y={}",
+                    client_id, x, y
+                );
+                self.handle_position_update(client_id, Vec2 { x, y });
             }
-        } else {
-            warn!(
-                "{} {}",
-                connection.connection_id.to_string(),
-                "Received invalid message format from client"
-            );
+            BrokerMessage::ShardReady { shard_id } => {
+                info!(
+                    "Received ShardReady from broker for shard {}: activating it and migrating affected players if necessary",
+                    shard_id
+                );
+                self.handle_shard_ready(shard_id);
+                self.quad_tree.print_state();
+            }
+            BrokerMessage::PlayerDisconnected { client_id } => {
+                info!(
+                    "Received PlayerDisconnected from broker for client {}: removing it from quadtree and cleaning up state",
+                    client_id
+                );
+                self.quad_tree.print_state();
+                self.quad_tree.remove_player(client_id);
+                self.client_shards.remove(&client_id);
+                self.client_crossing_state.remove(&client_id);
+                self.quad_tree.print_state();
+            }
+            _ => {
+                warn!(
+                    "Received unsupported message type from client: {:?}",
+                    message
+                );
+            }
         }
     }
 
@@ -395,12 +386,31 @@ impl SpatialService {
             // if insertion required a split, it will NOT send anything on the network before orchestrator tells us the new shard is ready
             if old_network_shard != Some(result.network_shard_id) {
                 if let Some(old) = old_network_shard {
-                    // Player was already in the quadtree, so we need to send a switch authority alert to the broker instead of a simple subscribe
-                    info!(
-                        "Player {} moved from shard {} to shard {}, sending switch authority alert to broker",
-                        client_id, old, result.network_shard_id
-                    );
-                    self.emit_switch_authority(client_id, old, result.network_shard_id);
+                    // On regarde si on avait anticipé ce changement (est-ce que le nouveau shard était dans la marge ?)
+                    let old_nearby = self
+                        .client_crossing_state
+                        .get(&client_id)
+                        .cloned()
+                        .unwrap_or_default();
+
+                    if old_nearby.contains(&result.network_shard_id) {
+                        // Le joueur a traversé normalement, la CrossingAlert est déjà partie depuis longtemps. On Switch !
+                        info!("Normal border cross for {}", client_id);
+                        self.emit_switch_authority(client_id, old, result.network_shard_id);
+                    } else {
+                        // LE JOUEUR S'EST TÉLÉPORTÉ (ou a sauté la marge) !
+                        // On force la procédure complète de Handoff via la file d'attente.
+                        info!(
+                            "Player {} teleported to {}, forcing safe handoff sequence!",
+                            client_id, result.network_shard_id
+                        );
+                        self.player_states.push(PlayerState {
+                            client_id,
+                            parent_shard_id: old,
+                            neighbor_shard_id: result.network_shard_id,
+                            split_state: PlayerSplitState::EmitCrossingAlert,
+                        });
+                    }
                 } else {
                     // New player, just subscribe to the new shard
                     info!(
@@ -505,7 +515,8 @@ impl SpatialService {
                 // self.send_subscribe(affected_client, new_network_shard);
                 self.client_shards
                     .insert(affected_client, new_network_shard);
-
+                self.client_crossing_state
+                    .insert(affected_client, vec![new_network_shard]);
                 // info!(
                 //     "Player {} successfully transferred from parent {} to child {}",
                 //     affected_client, parent_shard_id, new_network_shard

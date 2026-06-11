@@ -104,7 +104,8 @@ pub fn process_network_events(
                             if let Some(spatial_stream) =
                                 state.connection_reliable_streams.get(&spatial_server_uuid)
                             {
-                                let disconnect_msg = BrokerMessage::PlayerDisconnected { client_id: id }.to_bytes();
+                                let disconnect_msg =
+                                    BrokerMessage::PlayerDisconnected { client_id: id }.to_bytes();
                                 let _ = network.peer.send(
                                     &spatial_server_uuid.into(),
                                     spatial_stream,
@@ -112,7 +113,6 @@ pub fn process_network_events(
                                 );
                             }
                         }
-
                     }
                     info!(
                         "[BROKER] Client ID {} (UUID {:?}) disconnected and cleaned up.",
@@ -141,6 +141,10 @@ pub fn process_network_events(
                     );
                     continue;
                 }
+
+                // Creates a new buffer to send to the spatial server the same way it received the data
+                let mut spatial_batch = Vec::new();
+                let mut pos_updates_count = 0;
 
                 for msg in messages {
                     match msg {
@@ -326,6 +330,12 @@ pub fn process_network_events(
                         BrokerMessage::PositionUpdate { client_id, x, y } => {
                             diagnostics.position_updates_received += 1;
 
+                            let forward_msg =
+                                BrokerMessage::PositionUpdate { client_id, x, y }.to_bytes();
+                            spatial_batch.extend_from_slice(&forward_msg);
+                            pos_updates_count += 1;
+
+                            /* This part is moved after the loop to batch multiple position updates together in a single send to the spatial server
                             if let Some(spatial_uuid) = state.spatial_server_uuid {
                                 if let Some(spatial_stream) =
                                     state.connection_unreliable_streams.get(&spatial_uuid)
@@ -374,6 +384,7 @@ pub fn process_network_events(
                                     diagnostics.position_updates_failed
                                 );
                             }
+                            */
                         }
 
                         BrokerMessage::CrossingAlert {
@@ -626,6 +637,32 @@ pub fn process_network_events(
                                 "[BROKER] Received unsupported message type from UUID {:?}. Ignoring.",
                                 connection.connection_id
                             );
+                        }
+                    }
+                }
+
+                // Send Batched Position Updates to Spatial Server after processing all messages in this batch
+                if !spatial_batch.is_empty() {
+                    if let Some(spatial_uuid) = state.spatial_server_uuid {
+                        if let Some(spatial_stream) =
+                            state.connection_unreliable_streams.get(&spatial_uuid)
+                        {
+                            match network.peer.send(
+                                &spatial_uuid.into(),
+                                spatial_stream,
+                                Bytes::from(spatial_batch),
+                            ) {
+                                Ok(_) => {
+                                    diagnostics.position_updates_forwarded += pos_updates_count;
+                                }
+                                Err(e) => {
+                                    diagnostics.position_updates_failed += pos_updates_count;
+                                    warn!(
+                                        "[BROKER] Failed to forward batched position updates: {:?}",
+                                        e
+                                    );
+                                }
+                            }
                         }
                     }
                 }

@@ -570,6 +570,24 @@ fn broadcast_network_updates(
 }
 
 // -------------------------------------------------------------------------
+// Frame Rate Diagnostic - logs every 100 frames to verify 20Hz operation
+// -------------------------------------------------------------------------
+fn network_frame_diagnostic(mut frame_counter: ResMut<NetworkFrameCounter>) {
+    frame_counter.frame_count += 1;
+    // Commented out to reduce console pollution - uncomment for debugging frame rates
+    // if frame_counter.frame_count % 20 == 0 {
+    //     debug!(
+    //         "[NETWORK] {} frames processed (20Hz = 1 frame every 50ms)",
+    //         frame_counter.frame_count
+    //     );
+    // }
+}
+
+// ===================================================================================================================
+// The following functions should probably be removed if broadcast_network_updates works properly, they are left here for reference and debugging purposes.
+// ===================================================================================================================
+
+// -------------------------------------------------------------------------
 // Position Updates (20Hz) - For Spatial Server
 // -------------------------------------------------------------------------
 fn broadcast_positions(
@@ -724,18 +742,4 @@ fn broadcast_aoi(
         }
         Err(e) => error!("Failed to serialize AOI Snapshot: {:?}", e),
     }
-}
-
-// -------------------------------------------------------------------------
-// Frame Rate Diagnostic - logs every 100 frames to verify 20Hz operation
-// -------------------------------------------------------------------------
-fn network_frame_diagnostic(mut frame_counter: ResMut<NetworkFrameCounter>) {
-    frame_counter.frame_count += 1;
-    // Commented out to reduce console pollution - uncomment for debugging frame rates
-    // if frame_counter.frame_count % 20 == 0 {
-    //     debug!(
-    //         "[NETWORK] {} frames processed (20Hz = 1 frame every 50ms)",
-    //         frame_counter.frame_count
-    //     );
-    // }
 }
