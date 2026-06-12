@@ -4,8 +4,10 @@ use game_sockets::{
     GameConnection, GameNetworkEvent, GamePeer, GameStream, GameStreamReliability,
     protocols::QuicBackend,
 };
+use shared::broker_protocol::BrokerMessage;
 use shared::{ClientMessage, ServerMessage};
 
+use crate::game::TargetPosition;
 use crate::loginmenu::ConnectionSettings;
 use crate::state::AppState;
 
@@ -19,16 +21,24 @@ pub struct ClientNetworkManager {
     pub unreliable_stream: Option<GameStream>,
 }
 
+#[derive(Resource, Default)]
+pub struct ClientNetworkDiagnostics {
+    pub aoi_snapshots_received: u64,
+    pub last_aoi_player_count: usize,
+}
+
 pub struct NetworkPlugin;
 
 impl Plugin for NetworkPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<ClientNetworkManager>()
+            .init_resource::<ClientNetworkDiagnostics>()
             .add_systems(OnEnter(AppState::InGame), start_connection)
             .add_systems(Update, handle_network.run_if(in_state(AppState::InGame)));
     }
 }
 
+// Creates game_socket connection to the given server (in fact to the broker)
 fn start_connection(
     mut net: ResMut<ClientNetworkManager>,
     mut settings: ResMut<ConnectionSettings>,
@@ -57,8 +67,12 @@ fn handle_network(
     settings: Res<ConnectionSettings>,
     mut commands: Commands,
     mut game_state: ResMut<crate::game::GameState>,
-    mut transforms: Query<&mut Transform>,
+    mut targets: Query<&mut TargetPosition>,
+    time: Res<Time>,
+    mut diagnostics: ResMut<ClientNetworkDiagnostics>,
 ) {
+    let current_time = time.elapsed_secs_f64();
+
     loop {
         let event_result = if let Some(peer) = &mut net.peer {
             peer.poll()
@@ -82,7 +96,15 @@ fn handle_network(
                     handle_stream_created(conn, stream, &mut net, &settings);
                 }
                 GameNetworkEvent::Message { data, .. } => {
-                    handle_server_message(&data, &mut commands, &mut game_state, &mut transforms);
+                    handle_server_message(
+                        &data,
+                        &mut commands,
+                        &mut game_state,
+                        &mut targets,
+                        current_time,
+                        &mut net,
+                        &mut diagnostics,
+                    );
                 }
                 GameNetworkEvent::Disconnected(_) => {
                     info!("[CLIENT] : Disconnected from the server.");
@@ -92,10 +114,22 @@ fn handle_network(
             Ok(None) | Err(_) => break, // No more event to process, exit the loop and wait for the next frame
         }
     }
+
+    // Despawn of entities for players we haven't seen for a while:
+    // If an entity in the HashMap hasn't been seen for more than 0.8 seconds (any AOI received), it is despawned and removed from the HashMap
+    game_state
+        .spawned_players
+        .retain(|_id, (entity, last_seen)| {
+            if current_time - *last_seen > 0.8 {
+                commands.entity(*entity).despawn();
+                false
+            } else {
+                true
+            }
+        });
 }
 
-
-// This function handles the creation of new streams from the server. It distinguishes between reliable and unreliable streams,
+// This function handles the creation of new streams from the broker. It distinguishes between reliable and unreliable streams,
 fn handle_stream_created(
     conn: GameConnection,
     stream: GameStream,
@@ -109,15 +143,28 @@ fn handle_stream_created(
             settings.username
         );
 
+        let mut username_bytes = [0u8; 12];
+        let name_bytes = settings.username.as_bytes();
+        let len = name_bytes.len().min(12);
+        username_bytes[..len].copy_from_slice(&name_bytes[..len]);
+
         let msg = ClientMessage::Join {
-            username: settings.username.clone(),
+            username: username_bytes,
         };
         match bincode::serialize(&msg) {
             Ok(bytes) => {
+                // Send the join message to the server via the reliable stream
+                let mut input_array = [0u8; 16];
+                let len = bytes.len().min(16);
+                input_array[..len].copy_from_slice(&bytes[..len]);
+
+                let broker_msg = BrokerMessage::ClientInput {
+                    client_id: 0, // TODO: wait for the broker's welcome message to get the actual client ID before sending inputs
+                    input: input_array,
+                };
+
                 if let Some(peer) = &mut net.peer {
-                    if let Err(e) = peer.send(&conn, &stream, Bytes::from(bytes)) {
-                        error!("Error sending join message : {:?}", e);
-                    }
+                    let _ = peer.send(&conn, &stream, Bytes::from(broker_msg.to_bytes()));
                 }
             }
             Err(e) => error!("Error serializing join message : {:?}", e),
@@ -127,11 +174,25 @@ fn handle_stream_created(
 
         // Send fake input to wake up the stream and make sure it's ready for low-latency messages
         //(and show all players in the AOI right after login, without waiting for the first real input from the player)
+        // TODO: This move input is most likely to be dropped by the server since the client ID is not known yet, but it serves the purpose of waking up the stream.
         let wake_up_msg = ClientMessage::MoveInput { x: 0.0, y: 0.0 };
-        if let Ok(bytes) = bincode::serialize(&wake_up_msg) {
-            if let Some(peer) = &mut net.peer {
-                let _ = peer.send(&conn, &stream, Bytes::from(bytes));
+        match bincode::serialize(&wake_up_msg) {
+            Ok(bytes) => {
+                // Send the first MoveInput message to the server via the reliable stream
+                let mut input_array = [0u8; 16];
+                let len = bytes.len().min(16);
+                input_array[..len].copy_from_slice(&bytes[..len]);
+
+                let broker_msg = BrokerMessage::ClientInput {
+                    client_id: 0,
+                    input: input_array,
+                };
+
+                if let Some(peer) = &mut net.peer {
+                    let _ = peer.send(&conn, &stream, Bytes::from(broker_msg.to_bytes()));
+                }
             }
+            Err(e) => error!("Error serializing MoveInput message : {:?}", e),
         }
     }
 }
@@ -142,23 +203,75 @@ fn handle_server_message(
     data: &[u8],
     commands: &mut Commands,
     game_state: &mut crate::game::GameState,
-    transforms: &mut Query<&mut Transform>,
+    targets: &mut Query<&mut TargetPosition>,
+    current_time: f64,
+    net: &mut ClientNetworkManager,
+    diagnostics: &mut ClientNetworkDiagnostics,
 ) {
-    let Ok(message) = bincode::deserialize::<ServerMessage>(data) else {
-        warn!("[CLIENT] Impossible to read the packet coming from the server.");
+    // Deserialize the broker message from the received bytes. If deserialization fails, log a warning and ignore the message.
+    let Some(broker_message) = BrokerMessage::from_bytes(data) else {
+        warn!("[CLIENT] Invalid broker envelope received.");
         return;
     };
 
-    match message {
-        ServerMessage::Welcome { player_id } => {
-            info!(
-                "[CLIENT]: Welcome message received with player ID: {}",
-                player_id
-            );
-            game_state.my_id = Some(player_id);
+    match broker_message {
+        BrokerMessage::Broadcast { payload } => {
+            if let Ok(server_msg) = bincode::deserialize::<ServerMessage>(&payload) {
+                match server_msg {
+                    ServerMessage::Welcome { player_id } => {
+                        info!("[CLIENT]: Welcome ! My ID is: {}", player_id);
+                        game_state.my_id = Some(player_id);
+
+                        // Send fake input to wake up the stream and make sure it's ready for low-latency messages
+                        //(and show all players in the AOI right after login, without waiting for the first real input from the player)
+                        if let (Some(peer), Some(conn), Some(stream)) = (
+                            &mut net.peer,
+                            &net.server_connection,
+                            &net.unreliable_stream,
+                        ) {
+                            let wake_up_msg = ClientMessage::MoveInput { x: 0.0, y: 0.0 };
+
+                            if let Ok(bytes) = bincode::serialize(&wake_up_msg) {
+                                let mut input_array = [0u8; 16];
+                                let len = bytes.len().min(16);
+                                input_array[..len].copy_from_slice(&bytes[..len]);
+
+                                let broker_msg = BrokerMessage::ClientInput {
+                                    client_id: player_id,
+                                    input: input_array,
+                                };
+
+                                if let Err(e) = peer.send(
+                                    conn,
+                                    stream,
+                                    bytes::Bytes::from(broker_msg.to_bytes()),
+                                ) {
+                                    error!("[CLIENT] Failed to send wake-up message: {:?}", e);
+                                } else {
+                                    info!("[CLIENT] Wake-up message sent successfully.");
+                                }
+                            }
+                        } else {
+                            error!(
+                                "[CLIENT] Cannot send wake-up message: peer, connection or stream not ready."
+                            );
+                        }
+                    }
+                    ServerMessage::AOISnapshot { players } => {
+                        crate::network::handle_aoi_snapshot(
+                            players,
+                            commands,
+                            game_state,
+                            targets,
+                            current_time,
+                            diagnostics,
+                        );
+                    }
+                }
+            }
         }
-        ServerMessage::AOISnapshot { players } => {
-            handle_aoi_snapshot(players, commands, game_state, transforms);
+        _ => {
+            // The client ignores other types of messages from the broker
         }
     }
 }
@@ -169,18 +282,36 @@ fn handle_aoi_snapshot(
     players: Vec<shared::PlayerState>,
     commands: &mut Commands,
     game_state: &mut crate::game::GameState,
-    transforms: &mut Query<&mut Transform>,
+    targets: &mut Query<&mut TargetPosition>,
+    current_time: f64,
+    diagnostics: &mut ClientNetworkDiagnostics,
 ) {
+    diagnostics.aoi_snapshots_received += 1;
+    diagnostics.last_aoi_player_count = players.len();
+
+    // Log every 20 snapshots (1 second at 20Hz) - comment out to reduce noise
+    if diagnostics.aoi_snapshots_received % 20 == 0 {
+        info!(
+            "[CLIENT] AOI snapshot #{} received with {} players",
+            diagnostics.aoi_snapshots_received,
+            players.len()
+        );
+    }
+
+    // Uncomment for detailed per-snapshot logging:
+    // debug!(\"[CLIENT] Received AOI with {} players\", players.len());
+
     let mut current_frame_ids = Vec::new();
 
     for p in players {
         current_frame_ids.push(p.id);
 
-        if let Some(&entity) = game_state.spawned_players.get(&p.id) {
-            // existing player in AOI, update position
-            if let Ok(mut transform) = transforms.get_mut(entity) {
-                transform.translation.x = p.x;
-                transform.translation.y = p.y;
+        if let Some(&mut (entity, ref mut last_seen)) = game_state.spawned_players.get_mut(&p.id) {
+            // Existing player in AOI, update their position and last seen timestamp
+            *last_seen = current_time;
+            if let Ok(mut target) = targets.get_mut(entity) {
+                target.x = p.x;
+                target.y = p.y;
             }
         } else {
             // new player in AOI, spawn an entity for them
@@ -207,6 +338,7 @@ fn handle_aoi_snapshot(
                     },
                     Transform::from_xyz(p.x, p.y, 0.0),
                     crate::game::PlayerComponent,
+                    crate::game::TargetPosition { x: p.x, y: p.y },
                 ))
                 .with_children(|parent| {
                     // Display the player's username above their character
@@ -222,18 +354,9 @@ fn handle_aoi_snapshot(
                 })
                 .id();
 
-            game_state.spawned_players.insert(p.id, entity);
+            game_state
+                .spawned_players
+                .insert(p.id, (entity, current_time));
         }
     }
-
-    // Despawn of entities that are no longer in the AOI :
-    // If an entity in the HashMap is not in the current frame's list of player IDs, it is despawned and removed from the HashMap
-    game_state.spawned_players.retain(|&id, &mut entity| {
-        if !current_frame_ids.contains(&id) {
-            commands.entity(entity).despawn();
-            false
-        } else {
-            true
-        }
-    });
 }

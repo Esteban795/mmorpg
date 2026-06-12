@@ -8,6 +8,8 @@ pub const TAG_BROADCAST: u8 = 0x04;
 pub const TAG_CLIENT_INPUT: u8 = 0x05;
 pub const TAG_POSITION_UPDATE: u8 = 0x10;
 pub const TAG_SHARD_READY: u8 = 0x11;
+pub const TAG_NEW_SPAWN_SHARD: u8 = 0x12;
+pub const TAG_PLAYER_DISCONNECTED: u8 = 0x13;
 
 // Spatial Server messages
 pub const TAG_CROSSING_ALERT: u8 = 0x25;
@@ -33,6 +35,9 @@ pub enum BrokerMessage {
         client_id: u32,
         topic: [u8; 32],
     },
+    PlayerDisconnected {
+        client_id: u32,
+    },
     Publish {
         topic: [u8; 32],
         payload: Vec<u8>,
@@ -51,6 +56,9 @@ pub enum BrokerMessage {
     },
     ShardReady {
         shard_id: u32,
+    },
+    NewSpawnShard {
+        new_shard_id: u32,
     },
 
     // Spatial server messages
@@ -159,6 +167,14 @@ impl BrokerMessage {
             BrokerMessage::ShardReady { shard_id } => {
                 buf.put_u8(TAG_SHARD_READY);
                 buf.put_u32_le(*shard_id);
+            }
+            BrokerMessage::NewSpawnShard { new_shard_id } => {
+                buf.put_u8(TAG_NEW_SPAWN_SHARD);
+                buf.put_u32_le(*new_shard_id);
+            }
+            BrokerMessage::PlayerDisconnected { client_id } => {
+                buf.put_u8(TAG_PLAYER_DISCONNECTED);
+                buf.put_u32_le(*client_id);
             }
         }
         buf.freeze().to_vec()
@@ -307,8 +323,90 @@ impl BrokerMessage {
                 let shard_id = buf.get_u32_le();
                 Some(BrokerMessage::ShardReady { shard_id })
             }
-            _ => None, // Tag inconnu
+            TAG_NEW_SPAWN_SHARD => {
+                if buf.remaining() < 4 {
+                    return None;
+                }
+                let new_shard_id = buf.get_u32_le();
+                Some(BrokerMessage::NewSpawnShard { new_shard_id })
+            }
+            TAG_PLAYER_DISCONNECTED => {
+                if buf.remaining() < 4 {
+                    return None;
+                }
+                let client_id = buf.get_u32_le();
+                Some(BrokerMessage::PlayerDisconnected { client_id })
+            }
+            _ => None, // Unknown tag
         }
+    }
+
+    // Utility function to parse multiple concatenated messages from a single byte stream, returning a vector of BrokerMessage
+    pub fn parse_multiple(buffer: &mut Vec<u8>) -> Vec<BrokerMessage> {
+        let mut messages = Vec::new();
+        let mut offset = 0;
+
+        while offset < buffer.len() {
+            let tag = buffer[offset];
+            let mut msg_len = 1; // Start with 1 byte for the tag
+
+            // Computes the total length of the message based on its tag and the expected format
+            match tag {
+                TAG_SUBSCRIBE | TAG_UNSUBSCRIBE => msg_len += 36,
+                TAG_PUBLISH => {
+                    if buffer.len() - offset < 35 {
+                        break;
+                    }
+                    let payload_len =
+                        u16::from_le_bytes([buffer[offset + 33], buffer[offset + 34]]) as usize;
+                    msg_len += 34 + payload_len;
+                }
+                TAG_BROADCAST => {
+                    if buffer.len() - offset < 3 {
+                        break;
+                    }
+                    let payload_len =
+                        u16::from_le_bytes([buffer[offset + 1], buffer[offset + 2]]) as usize;
+                    msg_len += 2 + payload_len;
+                }
+                TAG_CLIENT_INPUT => msg_len += 20,
+                TAG_POSITION_UPDATE => msg_len += 12,
+                TAG_CROSSING_ALERT | TAG_AUTHORITY_SWITCH | TAG_CROSSING_EXIT => msg_len += 68,
+                TAG_INTER_SHARD_MESSAGE => {
+                    if buffer.len() - offset < 67 {
+                        break;
+                    }
+                    let payload_len =
+                        u16::from_le_bytes([buffer[offset + 65], buffer[offset + 66]]) as usize;
+                    msg_len += 66 + payload_len;
+                }
+                TAG_SHARD_READY => msg_len += 4,
+                TAG_NEW_SPAWN_SHARD => msg_len += 4,
+                TAG_PLAYER_DISCONNECTED => msg_len += 4,
+                _ => {
+                    buffer.clear();
+                    return messages;
+                } // Unknown tag, clear corrupted buffer and stop parsing
+            }
+
+            if buffer.len() - offset < msg_len {
+                break;
+            } // Incomplete message, wait for more data
+
+            // Parse the message and add it to the vector
+            if let Some(msg) = BrokerMessage::from_bytes(&buffer[offset..offset + msg_len]) {
+                messages.push(msg);
+            }
+
+            // Move to the next message in the stream
+            offset += msg_len;
+        }
+        if offset > 0 {
+            buffer.drain(..offset);
+            //tracing::warn!( "Parsed {} messages from buffer, {} bytes remaining", messages.len(), buffer.len());
+        } // Remove parsed messages from the buffer
+
+        messages
     }
 }
 

@@ -1,11 +1,10 @@
-
-#[derive(Debug, Clone, Copy, PartialEq)] 
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Vec2 {
     pub x: f32,
     pub y: f32,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)] 
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Rect {
     pub x: f32,
     pub y: f32,
@@ -44,7 +43,7 @@ impl Rect {
 
     pub fn intersects(&self, other: &Rect) -> bool {
         !(self.x > other.x + other.width
-            || self.x + self.width< other.x
+            || self.x + self.width < other.x
             || self.y > other.y + other.height
             || self.y + self.height < other.y)
     }

@@ -1,4 +1,4 @@
-use game_sockets::{GameConnection, GameStream, GameStreamReliability};
+use game_sockets::{GameStream, GameStreamReliability};
 use std::collections::HashMap;
 use tracing::{error, info, warn};
 
@@ -11,27 +11,30 @@ use shared::broker_protocol::{BrokerMessage, string_to_topic};
 use shared::orchestrator_protocol::OrchestratorMessage;
 use std::time::{Duration, Instant};
 
-#[derive(Copy,Clone,Debug)]
+use shared::{MAP_BOUND_MIN, MAP_SIZE};
+
+#[derive(Copy, Clone, Debug)]
 enum PlayerSplitState {
     EmitCrossingAlert,
     EmitSwitchAuthority,
     EmitCrossingExit,
 }
 
-#[derive(Copy,Clone,Debug)]
+#[derive(Copy, Clone, Debug)]
 struct PlayerState {
     client_id: u32,
     parent_shard_id: u32,
-    neighbor_shard_id : u32,
+    neighbor_shard_id: u32,
     split_state: PlayerSplitState,
 }
 
-const MARGIN: f32 = 50.0;
+const MARGIN: f32 = 200.0;
 pub struct QuicConnection {
     pub peer: GamePeer,
     pub connection: Option<game_sockets::GameConnection>,
     pub reliable_stream: Option<GameStream>,
     pub unreliable_stream: Option<GameStream>,
+    pub buffer: Vec<u8>,
 }
 
 pub struct SpatialService {
@@ -39,6 +42,10 @@ pub struct SpatialService {
     client_shards: HashMap<u32, u32>, // client_id -> shard_id
     client_crossing_state: HashMap<u32, Vec<u32>>,
     player_states: Vec<PlayerState>,
+
+    spawn_shard_id : u32,
+    spawn_point: Vec2,
+
     // QUIC connections to the broker & orchestrator
     pub quic_broker: Option<QuicConnection>,
     pub quic_orchestrator: Option<QuicConnection>,
@@ -73,6 +80,7 @@ impl SpatialService {
             connection: None,
             reliable_stream: None,
             unreliable_stream: None,
+            buffer: Vec::new(),
         });
 
         let quic_orchestrator = Some(QuicConnection {
@@ -80,15 +88,16 @@ impl SpatialService {
             connection: None,
             reliable_stream: None,
             unreliable_stream: None,
+            buffer: Vec::new(),
         });
 
         Self {
             quad_tree: QuadTree::new(
                 Rect {
-                    x: -500.0,
-                    y: -500.0,
-                    width: 1000.0,
-                    height: 1000.0,
+                    x: MAP_BOUND_MIN,
+                    y: MAP_BOUND_MIN,
+                    width: MAP_SIZE,
+                    height: MAP_SIZE,
                 },
                 0,
                 4,
@@ -100,14 +109,24 @@ impl SpatialService {
             quic_orchestrator: quic_orchestrator,
             client_crossing_state: HashMap::new(),
             player_states: Vec::new(),
+            spawn_point: Vec2 {
+                x: shared::SPAWN_X,
+                y: shared::SPAWN_Y,
+            },
+            spawn_shard_id: 0,
         }
     }
 
     fn process_player_states(&mut self) {
-        let mut pending_delete  = Vec::new();
+        let mut pending_delete = Vec::new();
         for i in 0..self.player_states.len() {
             let player_state = self.player_states.get(i).clone().unwrap();
-            let (client_id, old_shard_id, new_shard_id, split_state) = (player_state.client_id, player_state.parent_shard_id,player_state.neighbor_shard_id, player_state.split_state);
+            let (client_id, old_shard_id, new_shard_id, split_state) = (
+                player_state.client_id,
+                player_state.parent_shard_id,
+                player_state.neighbor_shard_id,
+                player_state.split_state,
+            );
             match split_state {
                 PlayerSplitState::EmitCrossingAlert => {
                     self.emit_crossing_alert(client_id, old_shard_id, new_shard_id);
@@ -131,7 +150,8 @@ impl SpatialService {
 
     // NETWORK HANDLING : POLL QUIC CONNECTIONS AND DISPATCH MESSAGES TO APPROPRIATE HANDLERS
     fn poll_broker_events(&mut self) {
-        let mut messages_to_process: Vec<(GameConnection, Bytes)> = Vec::new();
+        let mut parsed_messages = Vec::new();
+
         if let Some(quic_broker) = &mut self.quic_broker {
             while let Ok(Some(event)) = quic_broker.peer.poll() {
                 match event {
@@ -164,9 +184,31 @@ impl SpatialService {
                             connection.connection_id,
                             stream.is_reliable()
                         );
+
+                        let dummy_msg = BrokerMessage::Subscribe {
+                            client_id: u32::MAX,
+                            topic: [0u8; 32],
+                        };
+
                         match stream.is_reliable() {
-                            true => quic_broker.reliable_stream = Some(stream),
-                            false => quic_broker.unreliable_stream = Some(stream),
+                            true => {
+                                quic_broker.reliable_stream = Some(stream.clone());
+                                // Send on reliable stream to register the UUID
+                                let _ = quic_broker.peer.send(
+                                    &connection,
+                                    &stream,
+                                    Bytes::from(dummy_msg.to_bytes()),
+                                );
+                            }
+
+                            false => {
+                                quic_broker.unreliable_stream = Some(stream.clone());
+                                let _ = quic_broker.peer.send(
+                                    &connection,
+                                    &stream,
+                                    Bytes::from(dummy_msg.to_bytes()),
+                                );
+                            }
                         }
                     }
                     GameNetworkEvent::StreamClosed(connection, stream) => {
@@ -191,18 +233,12 @@ impl SpatialService {
                             return;
                         }
                     }
-                    GameNetworkEvent::Message {
-                        connection,
-                        stream,
-                        data,
-                    } => {
-                        info!(
-                            " Message received from broker {:?} on stream {:?}: {} bytes",
-                            connection.connection_id,
-                            stream,
-                            data.len()
-                        );
-                        messages_to_process.push((connection, data));
+                    GameNetworkEvent::Message { data, .. } => {
+                        // Parse all incoming messages from the broker connection first
+                        quic_broker.buffer.extend_from_slice(&data);
+
+                        let mut msgs = BrokerMessage::parse_multiple(&mut quic_broker.buffer);
+                        parsed_messages.append(&mut msgs);
                     }
                     GameNetworkEvent::Error { connection, inner } => {
                         warn!(
@@ -214,8 +250,8 @@ impl SpatialService {
             }
         }
 
-        for (connection, data) in messages_to_process {
-            self.handle_broker_message(&connection, &data);
+        for message in parsed_messages {
+            self.handle_broker_message(message);
         }
     }
 
@@ -293,43 +329,46 @@ impl SpatialService {
         }
     }
 
-    fn handle_broker_message(&mut self, connection: &game_sockets::GameConnection, data: &[u8]) {
-        if let Some(message) = BrokerMessage::from_bytes(data) {
-            match message {
-                BrokerMessage::PositionUpdate { client_id, x, y } => {
-                    info!(
-                        "Received PositionUpdate from broker for client {}: x={}, y={}",
-                        client_id, x, y
-                    );
-                    self.handle_position_update(client_id, Vec2 { x, y });
-                }
-                BrokerMessage::ShardReady { shard_id } => {
-                    info!(
-                        "Received ShardReady from broker for shard {}: activating it and migrating affected players if necessary",
-                        shard_id
-                    );
-                    self.handle_shard_ready(shard_id);
-                    self.quad_tree.print_state();
-                }
-                _ => {
-                    warn!(
-                        "Received unsupported message type from client: {:?}",
-                        message
-                    );
-                }
+    fn handle_broker_message(&mut self, message: BrokerMessage) {
+        match message {
+            BrokerMessage::PositionUpdate { client_id, x, y } => {
+                // info!(
+                //     "Received PositionUpdate from broker for client {}: x={}, y={}",
+                //     client_id, x, y
+                // );
+                self.handle_position_update(client_id, Vec2 { x, y });
             }
-        } else {
-            warn!(
-                "{} {}",
-                connection.connection_id.to_string(),
-                "Received invalid message format from client"
-            );
+            BrokerMessage::ShardReady { shard_id } => {
+                info!(
+                    "Received ShardReady from broker for shard {}: activating it and migrating affected players if necessary",
+                    shard_id
+                );
+                self.handle_shard_ready(shard_id);
+                self.quad_tree.print_state();
+            }
+            BrokerMessage::PlayerDisconnected { client_id } => {
+                info!(
+                    "Received PlayerDisconnected from broker for client {}: removing it from quadtree and cleaning up state",
+                    client_id
+                );
+                self.quad_tree.print_state();
+                self.quad_tree.remove_player(client_id);
+                self.client_shards.remove(&client_id);
+                self.client_crossing_state.remove(&client_id);
+                self.quad_tree.print_state();
+            }
+            _ => {
+                warn!(
+                    "Received unsupported message type from client: {:?}",
+                    message
+                );
+            }
         }
     }
 
     pub fn run(&mut self) {
         let mut last_10hz_tick = Instant::now();
-        let interval_10hz = Duration::from_millis(100);
+        let interval_10hz = Duration::from_millis(500);
 
         loop {
             self.poll_broker_events();
@@ -355,17 +394,29 @@ impl SpatialService {
             // if insertion required a split, it will NOT send anything on the network before orchestrator tells us the new shard is ready
             if old_network_shard != Some(result.network_shard_id) {
                 if let Some(old) = old_network_shard {
-                    // Player was already in the quadtree, so we need to send a switch authority alert to the broker instead of a simple subscribe
-                    info!(
-                        "Player {} moved from shard {} to shard {}, sending switch authority alert to broker",
-                        client_id, old, result.network_shard_id
-                    );
-                    self.emit_switch_authority(client_id, old, result.network_shard_id);
+                    let old_nearby = self
+                        .client_crossing_state
+                        .get(&client_id)
+                        .cloned()
+                        .unwrap_or_default();
+
+                    if old_nearby.contains(&result.network_shard_id) {
+                        info!("Normal border cross for {}", client_id);
+                        self.emit_switch_authority(client_id, old, result.network_shard_id);
+                    } else {
+                        info!(
+                            "Player {} teleported to {}, forcing safe handoff sequence!",
+                            client_id, result.network_shard_id
+                        );
+                        self.emit_crossing_alert(client_id, old, result.network_shard_id);
+                        self.emit_switch_authority(client_id, old, result.network_shard_id);
+                        self.emit_crossing_exit(client_id, old, result.network_shard_id);
+                    }
                 } else {
                     // New player, just subscribe to the new shard
                     info!(
-                        "New player {} inserted in shard {}, subscribing to it",
-                        client_id, result.network_shard_id
+                        "New player {} inserted in shard {}, at pos {} {}, subscribing to it",
+                        client_id, result.network_shard_id, pos.x, pos.y
                     );
                     self.send_subscribe(client_id, result.network_shard_id);
 
@@ -385,6 +436,18 @@ impl SpatialService {
                     split_data.parent_shard_id
                 );
                 self.request_orchestrator_split(split_data);
+
+                let new_spawn_shard_id_opt = self.quad_tree.shard_for(&self.spawn_point);
+                if let Some(new_spawn_shard_id) = new_spawn_shard_id_opt {
+                    if new_spawn_shard_id != self.spawn_shard_id {
+                        info!(
+                            "Spawn shard has changed from {} to {} after split, notifying broker",
+                            self.spawn_shard_id, new_spawn_shard_id
+                        );
+                        self.spawn_shard_id = new_spawn_shard_id;
+                        self.send_new_spawn_shard(new_spawn_shard_id);
+                    }
+                }
             }
 
             // Crossing alert check :
@@ -451,25 +514,18 @@ impl SpatialService {
             // Partial mass handoff : only move players that are in this shard, old shard is still active and can serve players that are not in the new shard
             for (affected_client, new_network_shard) in updates {
                 info!(
-                    "Player {} is affected by the split of shard {}, moving it to new shard {}",
+                    "Transferring player {} from {} to {}",
                     affected_client, parent_shard_id, new_network_shard
                 );
-                self.player_states.push( PlayerState {
-                    client_id: affected_client,
-                    parent_shard_id : parent_shard_id,
-                    neighbor_shard_id : new_network_shard,
-                    split_state: PlayerSplitState::EmitCrossingAlert,
-                });
 
-                // self.send_unsubscribe(affected_client, parent_shard_id);
-                // self.send_subscribe(affected_client, new_network_shard);
-                // self.client_shards
-                //     .insert(affected_client, new_network_shard);
+                self.emit_crossing_alert(affected_client, parent_shard_id, new_network_shard);
+                self.emit_switch_authority(affected_client, parent_shard_id, new_network_shard);
+                self.emit_crossing_exit(affected_client, parent_shard_id, new_network_shard);
 
-                // info!(
-                //     "Player {} successfully transferred from parent {} to child {}",
-                //     affected_client, parent_shard_id, new_network_shard
-                // );
+                self.client_shards
+                    .insert(affected_client, new_network_shard);
+                self.client_crossing_state
+                    .insert(affected_client, vec![new_network_shard]);
             }
         } else {
             warn!(
@@ -620,6 +676,27 @@ impl SpatialService {
                             error!(
                                 " Failed to send crossing exit message for client {}: {:?}",
                                 client_id, e
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn send_new_spawn_shard(&self, new_shard_id: u32) {
+        info!(new_shard_id, "New spawn shard after split");
+
+        let msg = BrokerMessage::NewSpawnShard { new_shard_id };
+
+        if let Some(broker) = &self.quic_broker {
+            if let Some(peer) = Some(&broker.peer) {
+                if let Some(connection) = &broker.connection {
+                    if let Some(stream) = &broker.reliable_stream {
+                        if let Err(e) = peer.send(connection, stream, Bytes::from(msg.to_bytes())) {
+                            error!(
+                                " Failed to send new spawn shard message for shard {}: {:?}",
+                                new_shard_id, e
                             );
                         }
                     }

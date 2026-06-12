@@ -5,27 +5,41 @@ use redis::{Client, RedisError, aio::MultiplexedConnection};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use tracing::error;
-use uuid::Uuid;
 
 pub const DEFAULT_REDIS_IP: &str = "redis://127.0.0.1";
 pub const DEFAULT_GATEKEEPER_ADDR_PORT: &str = "127.0.0.1:8080";
 pub const DEFAULT_BROKER_IP: &str = "127.0.0.1";
 pub const DEFAULT_BROKER_PORT: u16 = 10001;
-pub const DEFAULT_ORCHESTRATOR_ADDR : &str = "127.0.0.1";
-pub const DEFAULT_ORCHESTRATOR_PORT: u16 = 10002;
+pub const DEFAULT_ORCHESTRATOR_ADDR: &str = "127.0.0.1";
+pub const DEFAULT_ORCHESTRATOR_QUIC_PORT: u16 = 10002;
+pub const DEFAULT_ORCH_HEARTBEAT_PORT: u16 = 8000;
+
+// Game Map Boundaries
+pub const MAP_BOUND_MIN: f32 = -2000.0;
+pub const MAP_BOUND_MAX: f32 = 2000.0;
+pub const MAP_SIZE: f32 = 4000.0;
+pub const SPAWN_X: f32 = 32.0;
+pub const SPAWN_Y: f32 = 40.0;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ClientMessage {
-    Join { username: String },
+    //Use a custom fixed-size username to have enough room in the payload.
+    Join { username: [u8; 12] },
     // For the AOI, direction vector (x = -1 for right/y = -1 for down, 0 for no movement, x = +1 for left/y = +1 for up)
     MoveInput { x: f32, y: f32 },
+    //4 bytes, will have to pad it to 16 bytes to fit in the input struct of the broker protocol.
+    Disconnect,
 }
 
 impl fmt::Display for ClientMessage {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ClientMessage::Join { username } => write!(f, "Join {{ username: {} }}", username),
+            ClientMessage::Join { username } => {
+                let name = String::from_utf8_lossy(username);
+                write!(f, "Join {{ username: {} }}", name)
+            }
             ClientMessage::MoveInput { x, y } => write!(f, "MoveInput {{ x: {}, y: {} }}", x, y),
+            ClientMessage::Disconnect => write!(f, "Disconnect"),
         }
     }
 }
@@ -33,7 +47,7 @@ impl fmt::Display for ClientMessage {
 // Messages sent from Dedicated Server to Client
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ServerMessage {
-    Welcome { player_id: Uuid },
+    Welcome { player_id: u32 },
     AOISnapshot { players: Vec<PlayerState> },
 }
 
@@ -120,7 +134,7 @@ pub struct SimpleServerInfo {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PlayerState {
-    pub id: Uuid,
+    pub id: u32,
     pub username: String,
     pub x: f32,
     pub y: f32,

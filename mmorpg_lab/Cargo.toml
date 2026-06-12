@@ -5,7 +5,8 @@ members = [
     "dedicated_server",
     "orchestrator",
     "gatekeeper",
-    "shared"
+    "shared",
+    "broker"
 , "spatialserver"
 , "game_sockets", "fakebroker"]
 

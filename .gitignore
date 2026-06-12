@@ -20,4 +20,7 @@ target
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
+*.vscode
+
 Lab_01.md
+tp2_mmo_pubsub_spatial.md
