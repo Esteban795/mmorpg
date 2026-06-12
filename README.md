@@ -46,7 +46,7 @@ Before building or running the project, ensure your development environment meet
     ```
   * **Windows/macOS:** Generally works out of the box with the standard Rust toolchain.
 
-## How to Test the Cluster
+## How to start the service
 
 **Prerequisite:** Ensure you have the Redis database running locally (e.g., via Docker:). 
 ```
@@ -59,44 +59,35 @@ Start by compiling the entire workspace to avoid file lock contentions later:
 cargo build
 ```
 
-1. Pre-build the Dedicated Server
++ Pre-build the Dedicated Server
 
 ```bash
 cargo build -p dedicated_server
 ```
 
-2. Launch the Orchestrator
-Open a new terminal in the mmorpg_lab directory and run:
+Then launch the following services in this order, from the `/mmorpg_lab/` directory : 
 
-```bash
+```
+cargo run -p broker
+```
+
+```
 cargo run -p orchestrator
 ```
 
-Note: The orchestrator will immediately detect that 0 servers are available and will automatically spawn 3 dedicated servers in the background. It will then receive their UDP heartbeats and register them in Redis.
+```
+cargo run -p spatialserver
+```
 
-## Connecting Clients
-
-With your Redis database and Orchestrator running, you can now simulate player traffic.
-
-1. Launch the Gatekeeper
-Open a new terminal and run the API gateway:
-
-```bash
+```
 cargo run -p gatekeeper
 ```
 
-2. Launch Game Clients
-Open one or multiple new terminals to launch the clients:
+Then run every client you want in seperate terminals
 
-```bash
+```
 cargo run -p client
 ```
-
-- In the game window, enter any Username you like.
-- The default test Password is 1234.
-- Click "Connect".
-
-Note: For testing purposes, the Orchestrator currently limits server capacity to 3 players. Once 3 players join the same server, the Orchestrator will mark it as full and automatically spawn a new server to accommodate the 4th player.
 
 ## Architecture & Implementation
 
