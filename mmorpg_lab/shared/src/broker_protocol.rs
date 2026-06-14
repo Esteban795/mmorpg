@@ -24,6 +24,10 @@ pub const TAG_HANDOFF_REQUEST: u8 = 0x20;
 pub const TAG_GHOST_UPDATE: u8 = 0x23;
 pub const TAG_HANDOFF_COMPLETE: u8 = 0x24;
 
+// Chat message tags
+pub const TAG_CLIENT_CHAT_MESSAGE: u8 = 0x40;
+pub const TAG_BROADCAST_CHAT_MESSAGE: u8 = 0x41;
+
 // --- BINARY PROTOCOL FOR BROKER MESSAGES ---
 #[derive(Debug, Clone)]
 pub enum BrokerMessage {
@@ -48,6 +52,14 @@ pub enum BrokerMessage {
     ClientInput {
         client_id: u32,
         input: [u8; 16],
+    },
+    ClientChatMessage {
+        client_id: u32,
+        msg: [u8; 64],
+    },
+    BroadcastChatMessage {
+        username : [u8; 32],
+        msg : [u8; 64],
     },
     PositionUpdate {
         client_id: u32,
@@ -175,6 +187,16 @@ impl BrokerMessage {
             BrokerMessage::PlayerDisconnected { client_id } => {
                 buf.put_u8(TAG_PLAYER_DISCONNECTED);
                 buf.put_u32_le(*client_id);
+            }
+            BrokerMessage::ClientChatMessage { client_id, msg } => {
+                buf.put_u8(TAG_CLIENT_CHAT_MESSAGE);
+                buf.put_u32_le(*client_id);
+                buf.put_slice(msg);
+            }
+            BrokerMessage::BroadcastChatMessage { username, msg } => {
+                buf.put_u8(TAG_BROADCAST_CHAT_MESSAGE);
+                buf.put_slice(username);
+                buf.put_slice(msg);
             }
         }
         buf.freeze().to_vec()
@@ -336,6 +358,25 @@ impl BrokerMessage {
                 }
                 let client_id = buf.get_u32_le();
                 Some(BrokerMessage::PlayerDisconnected { client_id })
+            }
+            TAG_CLIENT_CHAT_MESSAGE => {
+                if buf.remaining() < 68 {
+                    return None;
+                }
+                let client_id = buf.get_u32_le();
+                let mut msg = [0u8; 64];
+                buf.copy_to_slice(&mut msg);
+                Some(BrokerMessage::ClientChatMessage { client_id, msg })
+            }
+            TAG_BROADCAST_CHAT_MESSAGE => {
+                if buf.remaining() < 96 {
+                    return None;
+                }
+                let mut username = [0u8; 32];
+                let mut msg = [0u8; 64];
+                buf.copy_to_slice(&mut username);
+                buf.copy_to_slice(&mut msg);
+                Some(BrokerMessage::BroadcastChatMessage { username, msg })
             }
             _ => None, // Unknown tag
         }
