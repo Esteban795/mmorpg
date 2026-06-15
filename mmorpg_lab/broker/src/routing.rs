@@ -176,6 +176,13 @@ pub fn process_network_events(
                                         "[BROKER] Chat service connected with UUID {:?}",
                                         connection.connection_id
                                     );
+                                    if state.chat_server_uuid.is_none() {
+                                        state.chat_server_uuid = Some(connection.connection_id);
+                                        info!(
+                                            "[BROKER] Registered chat server UUID {:?}",
+                                            connection.connection_id
+                                        );
+                                    }
                                 }
                                 _ => {
                                     warn!(
@@ -659,7 +666,35 @@ pub fn process_network_events(
                             );
                             state.default_shard_id = new_shard_id;
                         }
+                        BrokerMessage::ClientChatMessage { client_id, msg } => {
+                            info!(
+                                "[BROKER] Received chat message from client {}",
+                                client_id
+                            );
+                            if let Some(chat_uuid) = state.chat_server_uuid {
+                                if let Some(rel_stream) =
+                                    state.connection_reliable_streams.get(&chat_uuid)
+                                {
+                                    let forward_msg =
+                                        BrokerMessage::ClientChatMessage { client_id, msg }
+                                            .to_bytes();
+                                    let _ = network.peer.send(
+                                        &chat_uuid.into(),
+                                        rel_stream,
+                                        Bytes::from(forward_msg),
+                                    );
+                                } else {
+                                    warn!(
+                                        "[BROKER] No reliable stream for chat service to forward client chat message."
+                                    );
+                                }
+                            } else {
+                                warn!(
+                                    "[BROKER] No chat server UUID registered yet to forward client chat message."
 
+                                )
+                            }
+                        }
                         _ => {
                             warn!(
                                 "[BROKER] Received unsupported message type from UUID {:?}. Ignoring.",
