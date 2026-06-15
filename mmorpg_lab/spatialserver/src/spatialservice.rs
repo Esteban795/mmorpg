@@ -7,7 +7,7 @@ use crate::rect::{Rect, Vec2};
 use crate::util::{get_added_ids, get_removed_ids};
 use bytes::Bytes;
 use game_sockets::{GameNetworkEvent, GamePeer, protocols::QuicBackend};
-use shared::broker_protocol::{BrokerMessage, string_to_topic};
+use shared::broker_protocol::{BrokerMessage, TAG_CLIENT_TYPE_SPATIAL_SERVER, string_to_topic};
 use shared::orchestrator_protocol::OrchestratorMessage;
 use std::time::{Duration, Instant};
 
@@ -43,7 +43,7 @@ pub struct SpatialService {
     client_crossing_state: HashMap<u32, Vec<u32>>,
     player_states: Vec<PlayerState>,
 
-    spawn_shard_id : u32,
+    spawn_shard_id: u32,
     spawn_point: Vec2,
 
     // QUIC connections to the broker & orchestrator
@@ -185,9 +185,14 @@ impl SpatialService {
                             stream.is_reliable()
                         );
 
-                        let dummy_msg = BrokerMessage::Subscribe {
-                            client_id: u32::MAX,
-                            topic: [0u8; 32],
+                        info!(
+                            "Sending Connected message to broker {:?} to register spatial server",
+                            connection.connection_id
+                        );
+                        
+                        let connected_msg = BrokerMessage::Connected {
+                            client_id: 1 as u32, // does not matter for the spatial server
+                            client_type: TAG_CLIENT_TYPE_SPATIAL_SERVER,
                         };
 
                         match stream.is_reliable() {
@@ -197,7 +202,7 @@ impl SpatialService {
                                 let _ = quic_broker.peer.send(
                                     &connection,
                                     &stream,
-                                    Bytes::from(dummy_msg.to_bytes()),
+                                    Bytes::from(connected_msg.to_bytes()),
                                 );
                             }
 
@@ -206,7 +211,7 @@ impl SpatialService {
                                 let _ = quic_broker.peer.send(
                                     &connection,
                                     &stream,
-                                    Bytes::from(dummy_msg.to_bytes()),
+                                    Bytes::from(connected_msg.to_bytes()),
                                 );
                             }
                         }

@@ -4,7 +4,9 @@ use crate::state::{BrokerDiagnostics, BrokerState};
 use bevy::prelude::*;
 use bytes::Bytes;
 use game_sockets::{GameNetworkEvent, GameStream};
-use shared::broker_protocol::{BrokerMessage, string_to_topic, topic_to_string};
+use shared::broker_protocol::{
+    BrokerMessage, TAG_CLIENT_TYPE_CHAT_SERVICE, TAG_CLIENT_TYPE_CLIENT, TAG_CLIENT_TYPE_SPATIAL_SERVER, string_to_topic, topic_to_string
+};
 use shared::{ClientMessage, ServerMessage};
 use tracing::{debug, info, warn};
 
@@ -148,16 +150,42 @@ pub fn process_network_events(
 
                 for msg in messages {
                     match msg {
-                        BrokerMessage::Subscribe { client_id, topic } => {
-                            if state.spatial_server_uuid.is_none() {
-                                // If this is the first subscription from the spatial server, register its UUID for direct routing of position updates.
-                                state.spatial_server_uuid = Some(connection.connection_id);
-                                info!(
-                                    "[BROKER] Registered spatial server UUID {:?}",
-                                    connection.connection_id
-                                );
-                            }
+                        BrokerMessage::Connected {
+                            client_id,
+                            client_type,
+                        } => {
+                            info!(
+                                "[BROKER] Client {} of type {} connected with UUID {:?}.",
+                                client_id, client_type, connection.connection_id
+                            );
 
+                            match client_type {
+                                TAG_CLIENT_TYPE_CLIENT => {}
+                                TAG_CLIENT_TYPE_SPATIAL_SERVER => {
+                                    if state.spatial_server_uuid.is_none() {
+                                        // If this is the first subscription from the spatial server, register its UUID for direct routing of position updates.
+                                        state.spatial_server_uuid = Some(connection.connection_id);
+                                        info!(
+                                            "[BROKER] Registered spatial server UUID {:?}",
+                                            connection.connection_id
+                                        );
+                                    }
+                                }
+                                TAG_CLIENT_TYPE_CHAT_SERVICE => {
+                                    info!(
+                                        "[BROKER] Chat service connected with UUID {:?}",
+                                        connection.connection_id
+                                    );
+                                }
+                                _ => {
+                                    warn!(
+                                        "[BROKER] Unknown client type {} connected with UUID {:?}.",
+                                        client_type, connection.connection_id
+                                    );
+                                }
+                            }
+                        }
+                        BrokerMessage::Subscribe { client_id, topic } => {
                             state
                                 .topic_subscribers
                                 .entry(topic)
