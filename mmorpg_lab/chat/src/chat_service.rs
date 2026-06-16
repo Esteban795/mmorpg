@@ -87,8 +87,19 @@ impl ChatService {
                         let msg_opt = BrokerMessage::from_bytes(data.as_ref());
 
                         if let Some(msg) = msg_opt {
-
                             match msg {
+                                BrokerMessage::ChatJoin {
+                                    client_id,
+                                    username,
+                                } => {
+                                    let username_str = String::from_utf8_lossy(&username);
+                                    info!(
+                                        "Client {} joined the chat with username: {:?}",
+                                        client_id, username_str
+                                    );
+                                    self.usernames.insert(client_id, username_str.to_string());
+                                }
+
                                 BrokerMessage::ClientChatMessage { client_id, msg } => {
                                     let str_msg = String::from_utf8_lossy(&msg);
                                     info!(
@@ -103,7 +114,11 @@ impl ChatService {
                                     let len = msg_bytes.len().min(msg.len());
                                     msg[..len].copy_from_slice(&msg_bytes[..len]);
 
-                                    let username_str = format!("Player{}", client_id);
+                                    let username_str = self
+                                        .usernames
+                                        .get(&client_id)
+                                        .cloned()
+                                        .unwrap_or_else(|| format!("Player{}", client_id));
                                     let username_bytes = username_str.as_bytes();
                                     let mut username = [0u8; 32];
                                     let len = username_bytes.len().min(username.len());

@@ -27,6 +27,7 @@ pub const TAG_HANDOFF_COMPLETE: u8 = 0x24;
 // Chat message tags
 pub const TAG_CLIENT_CHAT_MESSAGE: u8 = 0x40;
 pub const TAG_BROADCAST_CHAT_MESSAGE: u8 = 0x41;
+pub const TAG_CHAT_JOIN: u8 = 0x42;
 
 // Tag to identify what type of client is connecting to the broker
 pub const TAG_CLIENT_TYPE_CLIENT: u8 = 0x50;
@@ -65,6 +66,10 @@ pub enum BrokerMessage {
     ClientChatMessage {
         client_id: u32,
         msg: [u8; 64],
+    },
+    ChatJoin {
+        client_id: u32,
+        username: [u8; 32],
     },
     BroadcastChatMessage {
         username: [u8; 32],
@@ -201,6 +206,14 @@ impl BrokerMessage {
                 buf.put_u8(TAG_CLIENT_CHAT_MESSAGE);
                 buf.put_u32_le(*client_id);
                 buf.put_slice(msg);
+            }
+            BrokerMessage::ChatJoin {
+                client_id,
+                username,
+            } => {
+                buf.put_u8(TAG_CHAT_JOIN);
+                buf.put_u32_le(*client_id);
+                buf.put_slice(username);
             }
             BrokerMessage::BroadcastChatMessage { username, msg } => {
                 buf.put_u8(TAG_BROADCAST_CHAT_MESSAGE);
@@ -385,6 +398,18 @@ impl BrokerMessage {
                 buf.copy_to_slice(&mut msg);
                 Some(BrokerMessage::ClientChatMessage { client_id, msg })
             }
+            TAG_CHAT_JOIN => {
+                if buf.remaining() < 36 {
+                    return None;
+                }
+                let client_id = buf.get_u32_le();
+                let mut username = [0u8; 32];
+                buf.copy_to_slice(&mut username);
+                Some(BrokerMessage::ChatJoin {
+                    client_id,
+                    username,
+                })
+            }
             TAG_BROADCAST_CHAT_MESSAGE => {
                 if buf.remaining() < 96 {
                     return None;
@@ -455,6 +480,7 @@ impl BrokerMessage {
                 TAG_PLAYER_DISCONNECTED => msg_len += 4,
                 TAG_CLIENT_TYPE => msg_len += 5, // 4 octets (u32) + 1 octet (u8)
                 TAG_CLIENT_CHAT_MESSAGE => msg_len += 68, // 4 (u32) + 64 (array)
+                TAG_CHAT_JOIN => msg_len += 36,  // 4 (u32) + 32 (array)
                 TAG_BROADCAST_CHAT_MESSAGE => msg_len += 96, // 32 (array) + 64 (array)
                 _ => {
                     buffer.clear();

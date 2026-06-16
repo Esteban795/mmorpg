@@ -11,7 +11,7 @@ use shared::broker_protocol::{
     TAG_CLIENT_TYPE_SPATIAL_SERVER, string_to_topic, topic_to_string,
 };
 use shared::{ClientMessage, ServerMessage};
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 
 pub fn process_network_events(
     mut network: ResMut<BrokerNetwork>,
@@ -275,11 +275,10 @@ pub fn process_network_events(
                         } => {
                             // THE HANDSHAKE INTERCEPT (to assign an actual Client ID on Join and spawn them in a default shard/topic)
                             if client_id == 0 {
-                                let is_join = bincode::deserialize::<ClientMessage>(&input)
-                                    .map(|m| matches!(m, ClientMessage::Join { .. }))
-                                    .unwrap_or(false);
-
-                                if is_join {
+                                // Check if its a join message
+                                if let Ok(ClientMessage::Join { username }) =
+                                    bincode::deserialize::<ClientMessage>(&input)
+                                {
                                     if let Some(&real_id) =
                                         state.uuid_to_id.get(&connection.connection_id)
                                     {
@@ -335,6 +334,44 @@ pub fn process_network_events(
                                             connection.connection_id,
                                             state.default_shard_id
                                         );
+
+                                        // Forward join message to the chat server
+                                        let mut username_array = [0u8; 32];
+                                        let bytes = &username;
+                                        let len = bytes.len().min(32);
+                                        username_array[..len].copy_from_slice(&bytes[..len]);
+
+                                        let chat_join_msg = BrokerMessage::ChatJoin {
+                                            client_id: real_id,
+                                            username: username_array,
+                                        };
+
+                                        if let Some(chat_uuid) = state.chat_server_uuid {
+                                            if let Some(chat_stream) =
+                                                state.connection_reliable_streams.get(&chat_uuid)
+                                            {
+                                                if let Err(e) = network.peer.send(
+                                                    &chat_uuid.into(),
+                                                    chat_stream,
+                                                    Bytes::from(chat_join_msg.to_bytes()),
+                                                ) {
+                                                    warn!(
+                                                        "[BROKER] Failed to notify Chat Service of new player: {:?}",
+                                                        e
+                                                    );
+                                                } else {
+                                                    info!(
+                                                        "[BROKER] Sent ChatJoin to Chat Service for client {}",
+                                                        real_id
+                                                    );
+                                                }
+                                            }
+                                        } else {
+                                            warn!(
+                                                "[BROKER] Chat service is not connected, cannot send ChatJoin for client {}",
+                                                real_id
+                                            );
+                                        }
                                     }
                                 } else {
                                     // Wake-up MoveInput or other message with id == 0 before Welcome:
