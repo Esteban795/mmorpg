@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::network::BrokerNetwork;
 use crate::state::Topic;
 use crate::state::{BrokerDiagnostics, BrokerState};
@@ -5,7 +7,8 @@ use bevy::prelude::*;
 use bytes::Bytes;
 use game_sockets::{GameNetworkEvent, GameStream};
 use shared::broker_protocol::{
-    BrokerMessage, TAG_CLIENT_TYPE_CHAT_SERVICE, TAG_CLIENT_TYPE_CLIENT, TAG_CLIENT_TYPE_SPATIAL_SERVER, string_to_topic, topic_to_string
+    BrokerMessage, TAG_CLIENT_TYPE_CHAT_SERVICE, TAG_CLIENT_TYPE_CLIENT,
+    TAG_CLIENT_TYPE_SPATIAL_SERVER, string_to_topic, topic_to_string,
 };
 use shared::{ClientMessage, ServerMessage};
 use tracing::{debug, info, warn};
@@ -182,7 +185,15 @@ pub fn process_network_events(
                                             "[BROKER] Registered chat server UUID {:?}",
                                             connection.connection_id
                                         );
+                                        // Add stream
+                                        state
+                                            .connection_reliable_streams
+                                            .insert(connection.connection_id, stream.clone());
                                     }
+
+                                    // Create an entry for people to subscribe to the chat topic
+                                    let chat_topic = string_to_topic("chat");
+                                    state.topic_subscribers.insert(chat_topic, HashSet::new());
                                 }
                                 _ => {
                                     warn!(
@@ -301,6 +312,20 @@ pub fn process_network_events(
                                         state
                                             .topic_subscribers
                                             .entry(default_topic)
+                                            .or_default()
+                                            .insert(real_id);
+
+                                        // Subscribe the new client to the chat topic to receive global chat messages.
+                                        let chat_topic = string_to_topic("chat");
+                                        state
+                                            .client_topics
+                                            .entry(real_id)
+                                            .or_default()
+                                            .insert(chat_topic);
+
+                                        state
+                                            .topic_subscribers
+                                            .entry(chat_topic)
                                             .or_default()
                                             .insert(real_id);
 
@@ -667,10 +692,7 @@ pub fn process_network_events(
                             state.default_shard_id = new_shard_id;
                         }
                         BrokerMessage::ClientChatMessage { client_id, msg } => {
-                            info!(
-                                "[BROKER] Received chat message from client {}",
-                                client_id
-                            );
+                            info!("[BROKER] Received chat message from client {}", client_id);
                             if let Some(chat_uuid) = state.chat_server_uuid {
                                 if let Some(rel_stream) =
                                     state.connection_reliable_streams.get(&chat_uuid)
@@ -691,8 +713,38 @@ pub fn process_network_events(
                             } else {
                                 warn!(
                                     "[BROKER] No chat server UUID registered yet to forward client chat message."
-
                                 )
+                            }
+                        }
+                        BrokerMessage::BroadcastChatMessage { username, msg } => {
+                            info!(
+                                "[BROKER] Broadcasting chat message from client {:?} to all subscribers",
+                                username
+                            );
+                            // Broadcast the chat message to all subscribed clients
+                            if let Some(subscribers) =
+                                state.topic_subscribers.get(&string_to_topic("chat"))
+                            {
+                                for subscriber_id in subscribers.iter().copied() {
+                                    if let Some(&subscriber_uuid) =
+                                        state.id_to_uuid.get(&subscriber_id)
+                                    {
+                                        if let Some(rel_stream) =
+                                            state.connection_reliable_streams.get(&subscriber_uuid)
+                                        {
+                                            let forward_msg = BrokerMessage::BroadcastChatMessage {
+                                                username,
+                                                msg,
+                                            }
+                                            .to_bytes();
+                                            let _ = network.peer.send(
+                                                &subscriber_uuid.into(),
+                                                rel_stream,
+                                                Bytes::from(forward_msg),
+                                            );
+                                        }
+                                    }
+                                }
                             }
                         }
                         _ => {

@@ -87,7 +87,6 @@ impl ChatService {
                         let msg_opt = BrokerMessage::from_bytes(data.as_ref());
 
                         if let Some(msg) = msg_opt {
-                            info!("Received message from broker: {:?}", msg);
 
                             match msg {
                                 BrokerMessage::ClientChatMessage { client_id, msg } => {

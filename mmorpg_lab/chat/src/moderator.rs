@@ -1,4 +1,4 @@
-use aho_corasick::{AhoCorasick};
+use aho_corasick::AhoCorasick;
 use core::panic;
 use std::fs;
 use tracing::{error, info};
@@ -31,7 +31,15 @@ impl Moderator {
     }
 
     pub fn moderate_message(&self, message: &str) -> String {
-        let normalized = message.to_lowercase();
-        self.automaton.replace_all(&normalized, &["*"; 100])
+        let mut result = String::with_capacity(message.len());
+        self.automaton
+            .replace_all_with(message, &mut result, |_mat, matched_str, dst| {
+                let stars = "*".repeat(matched_str.chars().count());
+                dst.push_str(&stars);
+
+                true
+            });
+
+        result
     }
 }

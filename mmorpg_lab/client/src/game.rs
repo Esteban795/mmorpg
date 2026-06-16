@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use crate::network::ClientNetworkManager;
 use crate::state::AppState;
-
+use crate::chatbox::{ChatPlugin, ChatState};
 use shared::MAP_SIZE;
 
 pub struct GamePlugin;
@@ -29,6 +29,7 @@ pub struct PlayerComponent; // Tag component to identify player entities
 impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<GameState>()
+            .add_plugins(ChatPlugin)
             .add_systems(OnEnter(AppState::InGame), setup_map)
             .add_systems(
                 Update,
@@ -53,7 +54,13 @@ fn player_input(
     keyboard: Res<ButtonInput<KeyCode>>,
     mut net: ResMut<ClientNetworkManager>,
     game_state: Res<GameState>,
+    chat_state: Res<ChatState>,
 ) {
+
+    if chat_state.is_focused {
+        return;
+    }
+    
     let mut x = 0.0;
     let mut y = 0.0;
 

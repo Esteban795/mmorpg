@@ -7,6 +7,7 @@ use game_sockets::{
 use shared::broker_protocol::BrokerMessage;
 use shared::{ClientMessage, ServerMessage};
 
+use crate::chatbox::ChatState;
 use crate::game::TargetPosition;
 use crate::loginmenu::ConnectionSettings;
 use crate::state::AppState;
@@ -70,6 +71,7 @@ fn handle_network(
     mut targets: Query<&mut TargetPosition>,
     time: Res<Time>,
     mut diagnostics: ResMut<ClientNetworkDiagnostics>,
+    mut chat_state: ResMut<ChatState>,
 ) {
     let current_time = time.elapsed_secs_f64();
 
@@ -104,6 +106,7 @@ fn handle_network(
                         current_time,
                         &mut net,
                         &mut diagnostics,
+                        &mut chat_state,
                     );
                 }
                 GameNetworkEvent::Disconnected(_) => {
@@ -207,6 +210,7 @@ fn handle_server_message(
     current_time: f64,
     net: &mut ClientNetworkManager,
     diagnostics: &mut ClientNetworkDiagnostics,
+    chat_state: &mut ChatState,
 ) {
     // Deserialize the broker message from the received bytes. If deserialization fails, log a warning and ignore the message.
     let Some(broker_message) = BrokerMessage::from_bytes(data) else {
@@ -269,6 +273,23 @@ fn handle_server_message(
                     }
                 }
             }
+        }
+        BrokerMessage::BroadcastChatMessage { username, msg } => {
+            // Convert the fixed-size byte array back to a string, trimming any trailing null bytes
+            let username_str = String::from_utf8_lossy(&username)
+                .trim_end_matches(char::from(0))
+                .to_string();
+
+            let msg_str = String::from_utf8_lossy(&msg)
+                .trim_end_matches(char::from(0))
+                .to_string();
+
+
+            info!("[CLIENT] Chat message received from {}: {}", username_str, msg_str);
+            // Add the received chat message to the chat history
+            chat_state
+                .chat_history
+                .push(format!("{} : {}", username_str, msg_str));
         }
         _ => {
             // The client ignores other types of messages from the broker
