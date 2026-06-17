@@ -33,6 +33,7 @@ pub struct BrokerState {
     pub uuid_to_id: HashMap<Uuid, u32>,
     pub id_to_uuid: HashMap<u32, Uuid>,
     pub spatial_server_uuid: Option<Uuid>, // Track the spatial server's UUID for direct routing of position updates
+    pub chat_server_uuid: Option<Uuid>, 
 
     // Stream registry — one reliable + one unreliable stream per connection UUID.
     // Must be populated via StreamCreated events before any sends are attempted.
@@ -56,6 +57,7 @@ impl Default for BrokerState {
             connection_reliable_streams: HashMap::new(),
             connection_unreliable_streams: HashMap::new(),
             spatial_server_uuid: None,
+            chat_server_uuid: None,
             connection_buffers: HashMap::new(),
             default_shard_id: 0
         }

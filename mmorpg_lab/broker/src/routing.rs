@@ -1,12 +1,17 @@
+use std::collections::HashSet;
+
 use crate::network::BrokerNetwork;
 use crate::state::Topic;
 use crate::state::{BrokerDiagnostics, BrokerState};
 use bevy::prelude::*;
 use bytes::Bytes;
 use game_sockets::{GameNetworkEvent, GameStream};
-use shared::broker_protocol::{BrokerMessage, string_to_topic, topic_to_string};
+use shared::broker_protocol::{
+    BrokerMessage, TAG_CLIENT_TYPE_CHAT_SERVICE, TAG_CLIENT_TYPE_CLIENT,
+    TAG_CLIENT_TYPE_SPATIAL_SERVER, string_to_topic, topic_to_string,
+};
 use shared::{ClientMessage, ServerMessage};
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 
 pub fn process_network_events(
     mut network: ResMut<BrokerNetwork>,
@@ -148,16 +153,57 @@ pub fn process_network_events(
 
                 for msg in messages {
                     match msg {
-                        BrokerMessage::Subscribe { client_id, topic } => {
-                            if state.spatial_server_uuid.is_none() {
-                                // If this is the first subscription from the spatial server, register its UUID for direct routing of position updates.
-                                state.spatial_server_uuid = Some(connection.connection_id);
-                                info!(
-                                    "[BROKER] Registered spatial server UUID {:?}",
-                                    connection.connection_id
-                                );
-                            }
+                        BrokerMessage::Connected {
+                            client_id,
+                            client_type,
+                        } => {
+                            info!(
+                                "[BROKER] Client {} of type {} connected with UUID {:?}.",
+                                client_id, client_type, connection.connection_id
+                            );
 
+                            match client_type {
+                                TAG_CLIENT_TYPE_CLIENT => {}
+                                TAG_CLIENT_TYPE_SPATIAL_SERVER => {
+                                    if state.spatial_server_uuid.is_none() {
+                                        // If this is the first subscription from the spatial server, register its UUID for direct routing of position updates.
+                                        state.spatial_server_uuid = Some(connection.connection_id);
+                                        info!(
+                                            "[BROKER] Registered spatial server UUID {:?}",
+                                            connection.connection_id
+                                        );
+                                    }
+                                }
+                                TAG_CLIENT_TYPE_CHAT_SERVICE => {
+                                    info!(
+                                        "[BROKER] Chat service connected with UUID {:?}",
+                                        connection.connection_id
+                                    );
+                                    if state.chat_server_uuid.is_none() {
+                                        state.chat_server_uuid = Some(connection.connection_id);
+                                        info!(
+                                            "[BROKER] Registered chat server UUID {:?}",
+                                            connection.connection_id
+                                        );
+                                        // Add stream
+                                        state
+                                            .connection_reliable_streams
+                                            .insert(connection.connection_id, stream.clone());
+                                    }
+
+                                    // Create an entry for people to subscribe to the chat topic
+                                    let chat_topic = string_to_topic("chat");
+                                    state.topic_subscribers.insert(chat_topic, HashSet::new());
+                                }
+                                _ => {
+                                    warn!(
+                                        "[BROKER] Unknown client type {} connected with UUID {:?}.",
+                                        client_type, connection.connection_id
+                                    );
+                                }
+                            }
+                        }
+                        BrokerMessage::Subscribe { client_id, topic } => {
                             state
                                 .topic_subscribers
                                 .entry(topic)
@@ -229,11 +275,10 @@ pub fn process_network_events(
                         } => {
                             // THE HANDSHAKE INTERCEPT (to assign an actual Client ID on Join and spawn them in a default shard/topic)
                             if client_id == 0 {
-                                let is_join = bincode::deserialize::<ClientMessage>(&input)
-                                    .map(|m| matches!(m, ClientMessage::Join { .. }))
-                                    .unwrap_or(false);
-
-                                if is_join {
+                                // Check if its a join message
+                                if let Ok(ClientMessage::Join { username }) =
+                                    bincode::deserialize::<ClientMessage>(&input)
+                                {
                                     if let Some(&real_id) =
                                         state.uuid_to_id.get(&connection.connection_id)
                                     {
@@ -269,12 +314,64 @@ pub fn process_network_events(
                                             .or_default()
                                             .insert(real_id);
 
+                                        // Subscribe the new client to the chat topic to receive global chat messages.
+                                        let chat_topic = string_to_topic("chat");
+                                        state
+                                            .client_topics
+                                            .entry(real_id)
+                                            .or_default()
+                                            .insert(chat_topic);
+
+                                        state
+                                            .topic_subscribers
+                                            .entry(chat_topic)
+                                            .or_default()
+                                            .insert(real_id);
+
                                         info!(
                                             "[BROKER] Intercepted Join — assigned ID {} to UUID {:?}, spawned in shard:{}.",
                                             real_id,
                                             connection.connection_id,
                                             state.default_shard_id
                                         );
+
+                                        // Forward join message to the chat server
+                                        let mut username_array = [0u8; 32];
+                                        let bytes = &username;
+                                        let len = bytes.len().min(32);
+                                        username_array[..len].copy_from_slice(&bytes[..len]);
+
+                                        let chat_join_msg = BrokerMessage::ChatJoin {
+                                            client_id: real_id,
+                                            username: username_array,
+                                        };
+
+                                        if let Some(chat_uuid) = state.chat_server_uuid {
+                                            if let Some(chat_stream) =
+                                                state.connection_reliable_streams.get(&chat_uuid)
+                                            {
+                                                if let Err(e) = network.peer.send(
+                                                    &chat_uuid.into(),
+                                                    chat_stream,
+                                                    Bytes::from(chat_join_msg.to_bytes()),
+                                                ) {
+                                                    warn!(
+                                                        "[BROKER] Failed to notify Chat Service of new player: {:?}",
+                                                        e
+                                                    );
+                                                } else {
+                                                    info!(
+                                                        "[BROKER] Sent ChatJoin to Chat Service for client {}",
+                                                        real_id
+                                                    );
+                                                }
+                                            }
+                                        } else {
+                                            warn!(
+                                                "[BROKER] Chat service is not connected, cannot send ChatJoin for client {}",
+                                                real_id
+                                            );
+                                        }
                                     }
                                 } else {
                                     // Wake-up MoveInput or other message with id == 0 before Welcome:
@@ -631,7 +728,62 @@ pub fn process_network_events(
                             );
                             state.default_shard_id = new_shard_id;
                         }
-
+                        BrokerMessage::ClientChatMessage { client_id, msg } => {
+                            info!("[BROKER] Received chat message from client {}", client_id);
+                            if let Some(chat_uuid) = state.chat_server_uuid {
+                                if let Some(rel_stream) =
+                                    state.connection_reliable_streams.get(&chat_uuid)
+                                {
+                                    let forward_msg =
+                                        BrokerMessage::ClientChatMessage { client_id, msg }
+                                            .to_bytes();
+                                    let _ = network.peer.send(
+                                        &chat_uuid.into(),
+                                        rel_stream,
+                                        Bytes::from(forward_msg),
+                                    );
+                                } else {
+                                    warn!(
+                                        "[BROKER] No reliable stream for chat service to forward client chat message."
+                                    );
+                                }
+                            } else {
+                                warn!(
+                                    "[BROKER] No chat server UUID registered yet to forward client chat message."
+                                )
+                            }
+                        }
+                        BrokerMessage::BroadcastChatMessage { username, msg } => {
+                            info!(
+                                "[BROKER] Broadcasting chat message from client {:?} to all subscribers",
+                                username
+                            );
+                            // Broadcast the chat message to all subscribed clients
+                            if let Some(subscribers) =
+                                state.topic_subscribers.get(&string_to_topic("chat"))
+                            {
+                                for subscriber_id in subscribers.iter().copied() {
+                                    if let Some(&subscriber_uuid) =
+                                        state.id_to_uuid.get(&subscriber_id)
+                                    {
+                                        if let Some(rel_stream) =
+                                            state.connection_reliable_streams.get(&subscriber_uuid)
+                                        {
+                                            let forward_msg = BrokerMessage::BroadcastChatMessage {
+                                                username,
+                                                msg,
+                                            }
+                                            .to_bytes();
+                                            let _ = network.peer.send(
+                                                &subscriber_uuid.into(),
+                                                rel_stream,
+                                                Bytes::from(forward_msg),
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                        }
                         _ => {
                             warn!(
                                 "[BROKER] Received unsupported message type from UUID {:?}. Ignoring.",

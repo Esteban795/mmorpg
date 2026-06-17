@@ -10,7 +10,7 @@ pub const TAG_POSITION_UPDATE: u8 = 0x10;
 pub const TAG_SHARD_READY: u8 = 0x11;
 pub const TAG_NEW_SPAWN_SHARD: u8 = 0x12;
 pub const TAG_PLAYER_DISCONNECTED: u8 = 0x13;
-
+pub const TAG_CLIENT_TYPE: u8 = 0x14;
 // Spatial Server messages
 pub const TAG_CROSSING_ALERT: u8 = 0x25;
 pub const TAG_AUTHORITY_SWITCH: u8 = 0x26;
@@ -24,9 +24,23 @@ pub const TAG_HANDOFF_REQUEST: u8 = 0x20;
 pub const TAG_GHOST_UPDATE: u8 = 0x23;
 pub const TAG_HANDOFF_COMPLETE: u8 = 0x24;
 
+// Chat message tags
+pub const TAG_CLIENT_CHAT_MESSAGE: u8 = 0x40;
+pub const TAG_BROADCAST_CHAT_MESSAGE: u8 = 0x41;
+pub const TAG_CHAT_JOIN: u8 = 0x42;
+
+// Tag to identify what type of client is connecting to the broker
+pub const TAG_CLIENT_TYPE_CLIENT: u8 = 0x50;
+pub const TAG_CLIENT_TYPE_GAME_SERVER: u8 = 0x51;
+pub const TAG_CLIENT_TYPE_CHAT_SERVICE: u8 = 0x52;
+pub const TAG_CLIENT_TYPE_SPATIAL_SERVER: u8 = 0x53;
 // --- BINARY PROTOCOL FOR BROKER MESSAGES ---
 #[derive(Debug, Clone)]
 pub enum BrokerMessage {
+    Connected {
+        client_id: u32,
+        client_type: u8,
+    },
     Subscribe {
         client_id: u32,
         topic: [u8; 32],
@@ -48,6 +62,18 @@ pub enum BrokerMessage {
     ClientInput {
         client_id: u32,
         input: [u8; 16],
+    },
+    ClientChatMessage {
+        client_id: u32,
+        msg: [u8; 64],
+    },
+    ChatJoin {
+        client_id: u32,
+        username: [u8; 32],
+    },
+    BroadcastChatMessage {
+        username: [u8; 32],
+        msg: [u8; 64],
     },
     PositionUpdate {
         client_id: u32,
@@ -175,6 +201,32 @@ impl BrokerMessage {
             BrokerMessage::PlayerDisconnected { client_id } => {
                 buf.put_u8(TAG_PLAYER_DISCONNECTED);
                 buf.put_u32_le(*client_id);
+            }
+            BrokerMessage::ClientChatMessage { client_id, msg } => {
+                buf.put_u8(TAG_CLIENT_CHAT_MESSAGE);
+                buf.put_u32_le(*client_id);
+                buf.put_slice(msg);
+            }
+            BrokerMessage::ChatJoin {
+                client_id,
+                username,
+            } => {
+                buf.put_u8(TAG_CHAT_JOIN);
+                buf.put_u32_le(*client_id);
+                buf.put_slice(username);
+            }
+            BrokerMessage::BroadcastChatMessage { username, msg } => {
+                buf.put_u8(TAG_BROADCAST_CHAT_MESSAGE);
+                buf.put_slice(username);
+                buf.put_slice(msg);
+            }
+            BrokerMessage::Connected {
+                client_id,
+                client_type,
+            } => {
+                buf.put_u8(TAG_CLIENT_TYPE);
+                buf.put_u32_le(*client_id);
+                buf.put_u8(*client_type);
             }
         }
         buf.freeze().to_vec()
@@ -337,6 +389,49 @@ impl BrokerMessage {
                 let client_id = buf.get_u32_le();
                 Some(BrokerMessage::PlayerDisconnected { client_id })
             }
+            TAG_CLIENT_CHAT_MESSAGE => {
+                if buf.remaining() < 68 {
+                    return None;
+                }
+                let client_id = buf.get_u32_le();
+                let mut msg = [0u8; 64];
+                buf.copy_to_slice(&mut msg);
+                Some(BrokerMessage::ClientChatMessage { client_id, msg })
+            }
+            TAG_CHAT_JOIN => {
+                if buf.remaining() < 36 {
+                    return None;
+                }
+                let client_id = buf.get_u32_le();
+                let mut username = [0u8; 32];
+                buf.copy_to_slice(&mut username);
+                Some(BrokerMessage::ChatJoin {
+                    client_id,
+                    username,
+                })
+            }
+            TAG_BROADCAST_CHAT_MESSAGE => {
+                if buf.remaining() < 96 {
+                    return None;
+                }
+                let mut username = [0u8; 32];
+                let mut msg = [0u8; 64];
+                buf.copy_to_slice(&mut username);
+                buf.copy_to_slice(&mut msg);
+                Some(BrokerMessage::BroadcastChatMessage { username, msg })
+            }
+            TAG_CLIENT_TYPE => {
+                if buf.remaining() < 5 {
+                    // <-- CORRIGÉ : 4 (u32) + 1 (u8) = 5
+                    return None;
+                }
+                let client_id = buf.get_u32_le();
+                let client_type = buf.get_u8();
+                Some(BrokerMessage::Connected {
+                    client_id,
+                    client_type,
+                })
+            }
             _ => None, // Unknown tag
         }
     }
@@ -383,6 +478,10 @@ impl BrokerMessage {
                 TAG_SHARD_READY => msg_len += 4,
                 TAG_NEW_SPAWN_SHARD => msg_len += 4,
                 TAG_PLAYER_DISCONNECTED => msg_len += 4,
+                TAG_CLIENT_TYPE => msg_len += 5, // 4 octets (u32) + 1 octet (u8)
+                TAG_CLIENT_CHAT_MESSAGE => msg_len += 68, // 4 (u32) + 64 (array)
+                TAG_CHAT_JOIN => msg_len += 36,  // 4 (u32) + 32 (array)
+                TAG_BROADCAST_CHAT_MESSAGE => msg_len += 96, // 32 (array) + 64 (array)
                 _ => {
                     buffer.clear();
                     return messages;
