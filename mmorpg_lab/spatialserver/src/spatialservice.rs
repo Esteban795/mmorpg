@@ -12,7 +12,6 @@ use shared::orchestrator_protocol::OrchestratorMessage;
 
 use shared::{MAP_BOUND_MIN, MAP_SIZE};
 
-
 const MARGIN: f32 = 200.0;
 pub struct QuicConnection {
     pub peer: GamePeer,
@@ -519,19 +518,25 @@ impl SpatialService {
             topic: topic_bytes,
         };
 
-        if let Some(broker) = &self.quic_broker {
-            if let Some(peer) = Some(&broker.peer) {
-                if let Some(connection) = &broker.connection {
-                    if let Some(stream) = &broker.reliable_stream {
-                        if let Err(e) = peer.send(connection, stream, Bytes::from(msg.to_bytes())) {
-                            error!(
-                                " Failed to send subscribe message for client {}: {:?}",
-                                client_id, e
-                            );
-                        }
-                    }
-                }
-            }
+        let Some(broker) = &self.quic_broker else {
+            return;
+        };
+
+        let Some(connection) = &broker.connection else {
+            return;
+        };
+        let Some(stream) = &broker.reliable_stream else {
+            return;
+        };
+
+        if let Err(e) = broker
+            .peer
+            .send(connection, stream, Bytes::from(msg.to_bytes()))
+        {
+            error!(
+                "Failed to send subscribe message for client {}: {:?}",
+                client_id, e
+            );
         }
     }
 
@@ -550,19 +555,25 @@ impl SpatialService {
             neighbor_topic: neighbor_topic_bytes,
         };
 
-        if let Some(broker) = &self.quic_broker {
-            if let Some(peer) = Some(&broker.peer) {
-                if let Some(connection) = &broker.connection {
-                    if let Some(stream) = &broker.reliable_stream {
-                        if let Err(e) = peer.send(connection, stream, Bytes::from(msg.to_bytes())) {
-                            error!(
-                                " Failed to send crossing alert message for client {}: {:?}",
-                                client_id, e
-                            );
-                        }
-                    }
-                }
-            }
+        let Some(broker) = &self.quic_broker else {
+            return;
+        };
+
+        let Some(connection) = &broker.connection else {
+            return;
+        };
+        let Some(stream) = &broker.reliable_stream else {
+            return;
+        };
+
+        if let Err(e) = broker
+            .peer
+            .send(connection, stream, Bytes::from(msg.to_bytes()))
+        {
+            error!(
+                " Failed to send crossing alert message for client {}: {:?}",
+                client_id, e
+            );
         }
     }
 
@@ -584,19 +595,25 @@ impl SpatialService {
             new_auth_topic: neighbor_topic_bytes,
         };
 
-        if let Some(broker) = &self.quic_broker {
-            if let Some(peer) = Some(&broker.peer) {
-                if let Some(connection) = &broker.connection {
-                    if let Some(stream) = &broker.reliable_stream {
-                        if let Err(e) = peer.send(connection, stream, Bytes::from(msg.to_bytes())) {
-                            error!(
-                                " Failed to send switch authority message for client {}: {:?}",
-                                client_id, e
-                            );
-                        }
-                    }
-                }
-            }
+        let Some(broker) = &self.quic_broker else {
+            return;
+        };
+
+        let Some(connection) = &broker.connection else {
+            return;
+        };
+        let Some(stream) = &broker.reliable_stream else {
+            return;
+        };
+
+        if let Err(e) = broker
+            .peer
+            .send(connection, stream, Bytes::from(msg.to_bytes()))
+        {
+            error!(
+                " Failed to send switch authority message for client {}: {:?}",
+                client_id, e
+            );
         }
     }
 
@@ -615,19 +632,25 @@ impl SpatialService {
             new_auth_topic: new_topic_bytes,
         };
 
-        if let Some(broker) = &self.quic_broker {
-            if let Some(peer) = Some(&broker.peer) {
-                if let Some(connection) = &broker.connection {
-                    if let Some(stream) = &broker.reliable_stream {
-                        if let Err(e) = peer.send(connection, stream, Bytes::from(msg.to_bytes())) {
-                            error!(
-                                " Failed to send crossing exit message for client {}: {:?}",
-                                client_id, e
-                            );
-                        }
-                    }
-                }
-            }
+        let Some(broker) = &self.quic_broker else {
+            return;
+        };
+
+        let Some(connection) = &broker.connection else {
+            return;
+        };
+        let Some(stream) = &broker.reliable_stream else {
+            return;
+        };
+
+        if let Err(e) = broker
+            .peer
+            .send(connection, stream, Bytes::from(msg.to_bytes()))
+        {
+            error!(
+                " Failed to send crossing exit message for client {}: {:?}",
+                client_id, e
+            );
         }
     }
 
@@ -636,19 +659,25 @@ impl SpatialService {
 
         let msg = BrokerMessage::NewSpawnShard { new_shard_id };
 
-        if let Some(broker) = &self.quic_broker {
-            if let Some(peer) = Some(&broker.peer) {
-                if let Some(connection) = &broker.connection {
-                    if let Some(stream) = &broker.reliable_stream {
-                        if let Err(e) = peer.send(connection, stream, Bytes::from(msg.to_bytes())) {
-                            error!(
-                                " Failed to send new spawn shard message for shard {}: {:?}",
-                                new_shard_id, e
-                            );
-                        }
-                    }
-                }
-            }
+        let Some(broker) = &self.quic_broker else {
+            return;
+        };
+
+        let Some(connection) = &broker.connection else {
+            return;
+        };
+        let Some(stream) = &broker.reliable_stream else {
+            return;
+        };
+
+        if let Err(e) = broker
+            .peer
+            .send(connection, stream, Bytes::from(msg.to_bytes()))
+        {
+            error!(
+                " Failed to send new spawn shard message for shard {}: {:?}",
+                new_shard_id, e
+            );
         }
     }
 }
