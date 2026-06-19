@@ -4,6 +4,8 @@ use std::collections::HashMap;
 
 use crate::ServerConfig;
 
+const MAX_FOOD_IN_MAP: f32 = 2000.0; // This is the total number of food items we want on the entire map at any time
+
 #[derive(Message)]
 pub struct FoodSpawnedMessage(pub FoodData);
 
@@ -39,7 +41,7 @@ fn spawn_food_system(
 
     let area_ratio = shard_area / total_area;
 
-    let max_global_food = 2000.0; // This is the total number of food items we want on the entire map at any time
+    let max_global_food = MAX_FOOD_IN_MAP;
     let max_local_food = (max_global_food * area_ratio) as usize; // Each shard spawns a proportion of the total food based on its area
 
     if registry.food.len() < max_local_food {

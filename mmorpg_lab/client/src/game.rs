@@ -163,3 +163,88 @@ fn smooth_transform(
         }
     }
 }
+
+pub fn spawn_food(
+    commands: &mut Commands,
+    meshes: &mut ResMut<Assets<Mesh>>,
+    materials: &mut ResMut<Assets<ColorMaterial>>,
+    game_state: &mut GameState,
+    food_data: &shared::FoodData,
+    current_time: f64,
+) {
+    if !game_state.spawned_food.contains_key(&food_data.id) {
+        let entity = commands
+            .spawn((
+                Mesh2d(meshes.add(Circle::new(5.0))),
+                MeshMaterial2d(materials.add(Color::srgb(1.0, 1.0, 0.0))),
+                Transform::from_xyz(food_data.x, -food_data.y, -0.5),
+            ))
+            .id();
+        game_state
+            .spawned_food
+            .insert(food_data.id, (entity, current_time));
+    }
+}
+
+pub fn spawn_player(
+    commands: &mut Commands,
+    meshes: &mut ResMut<Assets<Mesh>>,
+    materials: &mut ResMut<Assets<ColorMaterial>>,
+    game_state: &mut GameState,
+    player_data: &shared::PlayerState,
+    current_time: f64,
+) {
+    let is_me = game_state.my_id == Some(player_data.id);
+    let color = if is_me {
+        Color::srgb(0.2, 0.2, 1.0)
+    } else {
+        Color::srgb(1.0, 0.2, 0.2)
+    };
+
+    // Display name truncated if too long
+    let display_name = if player_data.username.len() > 10 {
+        format!("{}...", &player_data.username[..8])
+    } else {
+        player_data.username.clone()
+    };
+
+    let base_radius = 15.0; // Default radius for a player with score 0
+    let current_radius = base_radius + player_data.score;
+
+    let entity =
+        commands
+            .spawn((
+                Mesh2d(meshes.add(Circle::new(1.0))),
+                MeshMaterial2d(materials.add(color)),
+                Transform::from_xyz(player_data.x, -player_data.y, 0.0).with_scale(Vec3::new(
+                    current_radius,
+                    current_radius,
+                    1.0,
+                )),
+                crate::game::PlayerComponent,
+                crate::game::TargetTransform {
+                    x: player_data.x,
+                    y: player_data.y,
+                    scale: current_radius,
+                },
+            ))
+            .with_children(|parent| {
+                // Display the player's username above their character
+                parent.spawn((
+                    Text2d::new(display_name),
+                    TextFont {
+                        font_size: 15.0,
+                        ..default()
+                    },
+                    TextColor(Color::WHITE),
+                    Transform::from_xyz(0.0, 1.0 + (20.0 / current_radius), 1.0)
+                        .with_scale(Vec3::new(1.0 / current_radius, 1.0 / current_radius, 1.0)),
+                    crate::game::PlayerNameText,
+                ));
+            })
+            .id();
+
+    game_state
+        .spawned_players
+        .insert(player_data.id, (entity, current_time));
+}

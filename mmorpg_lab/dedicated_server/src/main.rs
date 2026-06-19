@@ -13,6 +13,7 @@ use tracing_subscriber::FmtSubscriber;
 use food::FoodPlugin;
 use heartbeat::{HeartbeatPlugin, HeartbeatSocket};
 use network::{NetworkManager, NetworkPlugin};
+use shared::rect::Rect;
 use shared::{DEFAULT_BROKER_IP, DEFAULT_BROKER_PORT};
 use shared::{DEFAULT_ORCH_HEARTBEAT_PORT, DEFAULT_ORCHESTRATOR_ADDR};
 
@@ -33,7 +34,7 @@ pub struct ServerConfig {
     pub max_players: u16,
     pub orchestrator_addr: SocketAddr,
     pub broker_addr: SocketAddr,
-    pub bounds: shared::rect::Rect,
+    pub bounds: Rect,
 }
 
 fn main() {
@@ -122,7 +123,7 @@ fn main() {
         max_players,
         orchestrator_addr,
         broker_addr,
-        bounds: shared::rect::Rect {
+        bounds: Rect {
             x: bound_x,
             y: bound_y,
             width: bound_w,

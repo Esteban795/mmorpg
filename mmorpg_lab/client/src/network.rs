@@ -8,7 +8,7 @@ use shared::broker_protocol::BrokerMessage;
 use shared::{ClientMessage, ServerMessage};
 
 use crate::chatbox::ChatState;
-use crate::game::TargetTransform;
+use crate::game::{TargetTransform, spawn_food, spawn_player};
 use crate::loginmenu::ConnectionSettings;
 use crate::state::AppState;
 
@@ -129,11 +129,11 @@ fn handle_network(
     }
 
     // Despawn of entities for players we haven't seen for a while:
-    // If an entity in the HashMap hasn't been seen for more than 1.0 seconds (any AOI received), it is despawned and removed from the HashMap
+    // If an entity in the HashMap hasn't been seen for more than 0.5 seconds (any AOI received), it is despawned and removed from the HashMap
     game_state
         .spawned_players
         .retain(|_id, (entity, last_seen)| {
-            if current_time - *last_seen > 1.0 {
+            if current_time - *last_seen > 0.5 {
                 commands.entity(*entity).despawn();
                 false
             } else {
@@ -279,19 +279,10 @@ fn handle_server_message(
                         );
                     }
                     ServerMessage::FoodSync(food_list) => {
-                        info!("[CLIENT] FoodSync received: {} items", food_list.len());
+                        //debug!("[CLIENT] FoodSync received: {} items", food_list.len());
 
                         for f in food_list {
-                            if !game_state.spawned_food.contains_key(&f.id) {
-                                let entity = commands
-                                    .spawn((
-                                        Mesh2d(meshes.add(Circle::new(5.0))),
-                                        MeshMaterial2d(materials.add(Color::srgb(1.0, 1.0, 0.0))),
-                                        Transform::from_xyz(f.x, -f.y, -0.5),
-                                    ))
-                                    .id();
-                                game_state.spawned_food.insert(f.id, (entity, current_time));
-                            }
+                            spawn_food(commands, meshes, materials, game_state, &f, current_time);
                         }
                     }
                     ServerMessage::FoodEaten(eaten_ids) => {
@@ -383,58 +374,7 @@ fn handle_aoi_snapshot(
             }
         } else {
             // new player in AOI, spawn an entity for them
-            let is_me = game_state.my_id == Some(p.id);
-            let color = if is_me {
-                Color::srgb(0.2, 0.2, 1.0)
-            } else {
-                Color::srgb(1.0, 0.2, 0.2)
-            };
-
-            // Display name truncated if too long
-            let display_name = if p.username.len() > 10 {
-                format!("{}...", &p.username[..8])
-            } else {
-                p.username
-            };
-
-            let base_radius = 15.0; // Default radius for a player with score 0
-            let current_radius = base_radius + p.score;
-
-            let entity = commands
-                .spawn((
-                    Mesh2d(meshes.add(Circle::new(1.0))),
-                    MeshMaterial2d(materials.add(color)),
-                    Transform::from_xyz(p.x, -p.y, 0.0).with_scale(Vec3::new(
-                        current_radius,
-                        current_radius,
-                        1.0,
-                    )),
-                    crate::game::PlayerComponent,
-                    crate::game::TargetTransform {
-                        x: p.x,
-                        y: p.y,
-                        scale: current_radius,
-                    },
-                ))
-                .with_children(|parent| {
-                    // Display the player's username above their character
-                    parent.spawn((
-                        Text2d::new(display_name),
-                        TextFont {
-                            font_size: 15.0,
-                            ..default()
-                        },
-                        TextColor(Color::WHITE),
-                        Transform::from_xyz(0.0, 1.0 + (20.0 / current_radius), 1.0)
-                            .with_scale(Vec3::new(1.0 / current_radius, 1.0 / current_radius, 1.0)),
-                        crate::game::PlayerNameText,
-                    ));
-                })
-                .id();
-
-            game_state
-                .spawned_players
-                .insert(p.id, (entity, current_time));
+            spawn_player(commands, meshes, materials, game_state, &p, current_time);
         }
     }
 }
