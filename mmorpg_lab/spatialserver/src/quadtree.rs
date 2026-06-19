@@ -332,3 +332,148 @@ impl QuadTree {
         }
     }
 }
+
+
+
+
+#[cfg(test)]
+mod tests {
+    // THIS CANNOT USE THE GLOBAL `NEXT_SHARD_ID` COUNTER, OTHERWISE TESTS WILL INTERFERE WITH EACH OTHER
+    // We just need to extract the logic of generating new shard IDs into a separate function that we can mock in tests to return predictable IDs.
+    use super::*;
+
+    /// Helper to generate a basic quadtree, capacity 2
+    fn setup_tree() -> QuadTree {
+        QuadTree::new(
+            Rect {
+                x: 0.0,
+                y: 0.0,
+                width: 1000.0,
+                height: 1000.0,
+            },
+            0, // depth
+            4, // max_depth
+            2, // max_players_per_shard
+            100, // shard_id
+        )
+    }
+
+    #[test]
+    fn test_initialization() {
+        let tree = setup_tree();
+        assert_eq!(tree.shard_id, Some(100));
+        assert_eq!(tree.status, ShardStatus::Active);
+        assert!(tree.children.is_none());
+        assert_eq!(tree.players.len(), 0);
+    }
+
+    #[test]
+    fn test_insert_within_capacity() {
+        let mut tree = setup_tree();
+        
+        let res1 = tree.insert_player(1, Vec2 { x: 10.0, y: 10.0 }).unwrap();
+        assert_eq!(res1.logical_shard_id, 100);
+        assert_eq!(res1.network_shard_id, 100);
+        assert!(res1.trigger_orchestrator.is_none()); // make sure we don't trigger orchestrator when we're within capacity
+
+        let res2 = tree.insert_player(2, Vec2 { x: 20.0, y: 20.0 }).unwrap(); 
+        assert!(res2.trigger_orchestrator.is_none()); // make sure we don't trigger orchestrator when we're within capacity
+
+        // Make sure tree didnt split and they are correctly inserted
+        assert!(tree.children.is_none());
+        assert_eq!(tree.players.len(), 2);
+    }
+
+    #[test]
+    fn test_insert_triggers_split() {
+        let mut tree = setup_tree(); // Capacité de 2
+        
+        tree.insert_player(1, Vec2 { x: 100.0, y: 100.0 }); // Top-Left
+        tree.insert_player(2, Vec2 { x: 800.0, y: 800.0 }); // Bottom-Right
+        
+        // Should trigger split, since capacity is 2
+        let res3 = tree.insert_player(3, Vec2 { x: 100.0, y: 800.0 }).unwrap(); 
+
+        assert!(res3.trigger_orchestrator.is_some());
+        let split_data = res3.trigger_orchestrator.unwrap();
+        assert_eq!(split_data.parent_shard_id, 100);
+        assert_eq!(split_data.new_shards_ids.len(), 4);
+
+        // After split, the current node should have no shard_id and should have children
+        assert!(tree.children.is_some());
+        assert_eq!(tree.shard_id, None);
+        assert_eq!(tree.players.len(), 0); // Les joueurs ont été poussés vers les enfants
+
+        // Make sure network still points to parent shard since children are pending
+        assert_eq!(res3.network_shard_id, 100); 
+    }
+
+    #[test]
+    fn test_remove_player() {
+        let mut tree = setup_tree();
+        tree.insert_player(1, Vec2 { x: 10.0, y: 10.0 });
+        tree.insert_player(2, Vec2 { x: 20.0, y: 20.0 });
+
+        // Check if player is correctly removed
+        assert_eq!(tree.remove_player(1), true);
+        assert_eq!(tree.players.len(), 1);
+        assert_eq!(tree.players[0].0, 2);
+
+        // Try to remove a non-existent player
+        assert_eq!(tree.remove_player(999), false);
+    }
+
+    #[test]
+    fn test_commit_child_split() {
+        let mut tree = setup_tree();
+        tree.insert_player(1, Vec2 { x: 100.0, y: 100.0 });
+        tree.insert_player(2, Vec2 { x: 800.0, y: 800.0 });
+        let split_res = tree.insert_player(3, Vec2 { x: 100.0, y: 800.0 }).unwrap();
+        
+        let split_data = split_res.trigger_orchestrator.unwrap();
+        let target_child_id = split_data.new_shards_ids[0]; // On prend le premier enfant créé
+
+        let commit_res = tree.commit_child_split(target_child_id);
+        assert!(commit_res.is_some());
+        
+        let (fallback_id, changes) = commit_res.unwrap();
+        assert_eq!(fallback_id, 100);
+        
+        // NW child should have player 1, and be the one we committed
+        assert!(changes.contains(&(1, target_child_id)));
+    }
+
+    #[test]
+    fn test_shards_near() {
+        let mut tree = setup_tree();
+        // On force un split
+        tree.insert_player(1, Vec2 { x: 100.0, y: 100.0 });
+        tree.insert_player(2, Vec2 { x: 800.0, y: 800.0 });
+        tree.insert_player(3, Vec2 { x: 100.0, y: 800.0 });
+
+        // If we search right in the middle (x: 500, y: 500) with a margin of 100, we should hit all 4 quadrants.
+        // Since the status is "Pending", `shards_near` will return the fallback id (100) for each child,
+        // and the `dedup()` in the function will keep only one occurrence of 100
+        let near = tree.shards_near(&Vec2 { x: 500.0, y: 500.0 }, 100.0);
+        assert_eq!(near, vec![100]);
+
+        // Commit the split for all children to make them active
+        if let Some(children) = &mut tree.children {
+            for child in children.iter_mut() {
+                child.status = ShardStatus::Active;
+            }
+        }
+
+        // Children are now active, so `shards_near` should return the actual shard IDs of the 4 children (which are all different)
+        // and not the fallback parent shard ID.  
+        let near_active = tree.shards_near(&Vec2 { x: 500.0, y: 500.0 }, 100.0);
+        assert_eq!(near_active.len(), 4);
+    }
+
+    #[test]
+    fn test_out_of_bounds() {
+        let mut tree = setup_tree();
+        let res = tree.insert_player(1, Vec2 { x: 2000.0, y: 2000.0 });
+        assert!(res.is_none());
+    }
+}
