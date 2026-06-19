@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 
 use crate::network::BrokerNetwork;
+use crate::state::BrokerState;
 use crate::state::Topic;
-use crate::state::{BrokerDiagnostics, BrokerState};
 use bevy::prelude::*;
 use bytes::Bytes;
 use game_sockets::{GameNetworkEvent, GameStream};
@@ -13,11 +13,7 @@ use shared::broker_protocol::{
 use shared::{ClientMessage, ServerMessage};
 use tracing::{info, warn};
 
-pub fn process_network_events(
-    mut network: ResMut<BrokerNetwork>,
-    mut state: ResMut<BrokerState>,
-    mut diagnostics: ResMut<BrokerDiagnostics>,
-) {
+pub fn process_network_events(mut network: ResMut<BrokerNetwork>, mut state: ResMut<BrokerState>) {
     // Poll all available events from the background network thread
     while let Ok(Some(event)) = network.peer.poll() {
         match event {
@@ -163,7 +159,6 @@ pub fn process_network_events(
 
                 // Creates a new buffer to send to the spatial server the same way it received the data
                 let mut spatial_batch = Vec::new();
-                let mut pos_updates_count = 0;
 
                 for msg in messages {
                     match msg {
@@ -243,8 +238,6 @@ pub fn process_network_events(
 
                         // Shards publish AOI updates to the Broker with the "Publish" message, and the Broker forwards them to all subscribed clients.
                         BrokerMessage::Publish { topic, payload } => {
-                            diagnostics.aoi_publishes_received += 1;
-
                             // Register Shard
                             state.topic_to_shard.insert(topic, connection.connection_id);
 
@@ -269,7 +262,6 @@ pub fn process_network_events(
                                                 client_stream,
                                                 Bytes::from(out_msg),
                                             );
-                                            diagnostics.aoi_broadcasts_sent += 1;
                                         } else {
                                             warn!(
                                                 "[BROKER] No unreliable stream yet for client {} (UUID {:?}). AOI dropped.",
@@ -490,8 +482,6 @@ pub fn process_network_events(
                             y,
                             score,
                         } => {
-                            diagnostics.position_updates_received += 1;
-
                             let forward_msg = BrokerMessage::PositionUpdate {
                                 client_id,
                                 x,
@@ -500,58 +490,6 @@ pub fn process_network_events(
                             }
                             .to_bytes();
                             spatial_batch.extend_from_slice(&forward_msg);
-                            pos_updates_count += 1;
-
-                            /* This part is moved after the loop to batch multiple position updates together in a single send to the spatial server
-                            if let Some(spatial_uuid) = state.spatial_server_uuid {
-                                if let Some(spatial_stream) =
-                                    state.connection_unreliable_streams.get(&spatial_uuid)
-                                {
-                                    let forward_msg =
-                                        BrokerMessage::PositionUpdate { client_id, x, y, score }
-                                            .to_bytes();
-                                    match network.peer.send(
-                                        &spatial_uuid.into(),
-                                        spatial_stream,
-                                        Bytes::from(forward_msg),
-                                    ) {
-                                        Ok(_) => {
-                                            diagnostics.position_updates_forwarded += 1;
-                                            debug!(
-                                                "[BROKER] Forwarded position update for client {} to spatial server.",
-                                                client_id
-                                            );
-                                        }
-                                        Err(e) => {
-                                            diagnostics.position_updates_failed += 1;
-                                            warn!(
-                                                "[BROKER] Failed to forward position update for client {} to spatial server: {:?}",
-                                                client_id, e
-                                            );
-                                        }
-                                    }
-                                } else {
-                                    warn!(
-                                        "[BROKER] No spatial server stream registered yet for position update. Dropped (spatial server not connected yet?)."
-                                    );
-                                    diagnostics.position_updates_failed += 1;
-                                }
-                            } else {
-                                warn!(
-                                    "[BROKER] No spatial server UUID registered yet for position update. Dropped (spatial server not connected yet?)."
-                                );
-                                diagnostics.position_updates_failed += 1;
-                            }
-
-                            if diagnostics.position_updates_received % 10 == 0 {
-                                debug!(
-                                    "[BROKER-DIAG] PositionUpdates: {} received, {} forwarded, {} failed",
-                                    diagnostics.position_updates_received,
-                                    diagnostics.position_updates_forwarded,
-                                    diagnostics.position_updates_failed
-                                );
-                            }
-                            */
                         }
 
                         BrokerMessage::CrossingAlert {
@@ -875,10 +813,9 @@ pub fn process_network_events(
                                 Bytes::from(spatial_batch),
                             ) {
                                 Ok(_) => {
-                                    diagnostics.position_updates_forwarded += pos_updates_count;
+                                    //debug!("[BROKER] Forwarded batch of {} position updates to spatial server.", pos_updates_count );
                                 }
                                 Err(e) => {
-                                    diagnostics.position_updates_failed += pos_updates_count;
                                     warn!(
                                         "[BROKER] Failed to forward batched position updates: {:?}",
                                         e

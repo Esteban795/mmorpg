@@ -5,15 +5,6 @@ use uuid::Uuid;
 
 pub type Topic = [u8; 32];
 
-#[derive(Resource, Default)]
-pub struct BrokerDiagnostics {
-    pub position_updates_received: u64,
-    pub position_updates_forwarded: u64,
-    pub position_updates_failed: u64,
-    pub aoi_publishes_received: u64,
-    pub aoi_broadcasts_sent: u64,
-}
-
 //Basically all the things the broker needs to know to do its job of routing messages between clients and shards
 
 #[derive(Resource)]

@@ -24,18 +24,11 @@ pub struct ClientNetworkManager {
     pub unreliable_buffer: Vec<u8>,
 }
 
-#[derive(Resource, Default)]
-pub struct ClientNetworkDiagnostics {
-    pub aoi_snapshots_received: u64,
-    pub last_aoi_player_count: usize,
-}
-
 pub struct NetworkPlugin;
 
 impl Plugin for NetworkPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<ClientNetworkManager>()
-            .init_resource::<ClientNetworkDiagnostics>()
             .add_systems(OnEnter(AppState::InGame), start_connection)
             .add_systems(Update, handle_network.run_if(in_state(AppState::InGame)));
     }
@@ -72,7 +65,6 @@ fn handle_network(
     mut game_state: ResMut<crate::game::GameState>,
     mut targets: Query<&mut TargetTransform>,
     time: Res<Time>,
-    mut diagnostics: ResMut<ClientNetworkDiagnostics>,
     mut chat_state: ResMut<ChatState>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
@@ -120,7 +112,6 @@ fn handle_network(
                             &mut targets,
                             current_time,
                             &mut net,
-                            &mut diagnostics,
                             &mut chat_state,
                             &mut meshes,
                             &mut materials,
@@ -228,7 +219,6 @@ fn handle_server_message(
     targets: &mut Query<&mut TargetTransform>,
     current_time: f64,
     net: &mut ClientNetworkManager,
-    diagnostics: &mut ClientNetworkDiagnostics,
     chat_state: &mut ChatState,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<ColorMaterial>>,
@@ -284,7 +274,6 @@ fn handle_server_message(
                             game_state,
                             targets,
                             current_time,
-                            diagnostics,
                             meshes,
                             materials,
                         );
@@ -371,22 +360,9 @@ fn handle_aoi_snapshot(
     game_state: &mut crate::game::GameState,
     targets: &mut Query<&mut TargetTransform>,
     current_time: f64,
-    diagnostics: &mut ClientNetworkDiagnostics,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<ColorMaterial>>,
 ) {
-    diagnostics.aoi_snapshots_received += 1;
-    diagnostics.last_aoi_player_count = players.len();
-
-    // Log every 20 snapshots (1 second at 20Hz) - comment out to reduce noise
-    if diagnostics.aoi_snapshots_received % 20 == 0 {
-        debug!(
-            "[CLIENT] AOI snapshot #{} received with {} players",
-            diagnostics.aoi_snapshots_received,
-            players.len()
-        );
-    }
-
     // Uncomment for detailed per-snapshot logging:
     // debug!("[CLIENT] Received AOI with {} players", players.len());
 

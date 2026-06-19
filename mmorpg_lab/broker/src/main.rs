@@ -4,7 +4,7 @@ mod state;
 
 use crate::network::BrokerNetwork;
 use crate::routing::process_network_events;
-use crate::state::{BrokerState, BrokerDiagnostics};
+use crate::state::BrokerState;
 use bevy::app::ScheduleRunnerPlugin;
 use bevy::prelude::*;
 use game_sockets::{GamePeer, protocols::QuicBackend};
@@ -34,7 +34,6 @@ fn main() {
             1.0 / 60.0,
         )))
         .insert_resource(BrokerState::default())
-        .insert_resource(BrokerDiagnostics::default())
         .insert_resource(BrokerNetwork { peer: broker_peer })
         .add_systems(Update, process_network_events)
         .run();

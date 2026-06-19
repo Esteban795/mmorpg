@@ -9,8 +9,6 @@ use crate::network::ClientNetworkManager;
 use crate::state::AppState;
 use shared::MAP_SIZE;
 
-pub struct GamePlugin;
-
 #[derive(Resource, Default)]
 pub struct GameState {
     pub my_id: Option<u32>,
@@ -31,9 +29,13 @@ pub struct PlayerComponent; // Tag component to identify player entities
 #[derive(Component)]
 pub struct PlayerNameText; // Tag component to identify the Text2dBundle that displays the player's name above their head
 
+pub struct GamePlugin;
 impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<GameState>()
+            .insert_resource(ClientSettings {
+                map_texture_path: "map_bg.png".to_string(),
+            })
             .add_plugins(ChatPlugin)
             .add_systems(OnEnter(AppState::InGame), setup_map)
             .add_systems(
@@ -43,11 +45,20 @@ impl Plugin for GamePlugin {
     }
 }
 
-fn setup_map(mut commands: Commands, asset_server: Res<AssetServer>) {
+#[derive(Resource)]
+pub struct ClientSettings {
+    pub map_texture_path: String,
+}
+
+fn setup_map(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    settings: Res<ClientSettings>,
+) {
     // Floor
     commands.spawn((
         Sprite {
-            image: asset_server.load("Purple_Nebula_05-1024x1024.png"),
+            image: asset_server.load(&settings.map_texture_path),
             //color: Color::srgb(0.2, 0.5, 0.2),
             custom_size: Some(Vec2::new(MAP_SIZE, MAP_SIZE)),
             ..default()
