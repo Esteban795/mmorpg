@@ -1,4 +1,4 @@
-use crate::rect::{Rect, Vec2};
+use shared::rect::*;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 static NEXT_SHARD_ID: AtomicU32 = AtomicU32::new(1);
@@ -12,6 +12,7 @@ pub enum ShardStatus {
 pub struct SplitData {
     pub parent_shard_id: u32,
     pub new_shards_ids: [u32; 4], // IDs of newly created shards
+    pub parent_bounds: Rect,      // Bounds of the parent shard
 }
 
 pub struct InsertResult {
@@ -20,6 +21,7 @@ pub struct InsertResult {
     pub trigger_orchestrator: Option<SplitData>, // Contains information if split happened
 }
 
+#[derive(Debug, Clone)]
 pub struct QuadTree {
     pub bounds: Rect,
     pub depth: u8,
@@ -227,6 +229,7 @@ impl QuadTree {
         SplitData {
             parent_shard_id: parent_id,
             new_shards_ids: [id_nw, id_ne, id_sw, id_se],
+            parent_bounds: self.bounds,
         }
     }
 

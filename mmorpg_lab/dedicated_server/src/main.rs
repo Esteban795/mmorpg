@@ -1,3 +1,4 @@
+mod food;
 mod heartbeat;
 mod network;
 
@@ -9,6 +10,7 @@ use std::time::Duration;
 use tracing::{Level, error, info};
 use tracing_subscriber::FmtSubscriber;
 
+use food::FoodPlugin;
 use heartbeat::{HeartbeatPlugin, HeartbeatSocket};
 use network::{NetworkManager, NetworkPlugin};
 use shared::{DEFAULT_BROKER_IP, DEFAULT_BROKER_PORT};
@@ -24,12 +26,14 @@ use crate::heartbeat::ShardId;
 #[derive(Resource)]
 pub struct ServerConfig {
     pub id: u32,
+    pub parent_shard_id: u32,
     pub ip: String,
     pub port: u16,
     pub zone: String,
     pub max_players: u16,
     pub orchestrator_addr: SocketAddr,
     pub broker_addr: SocketAddr,
+    pub bounds: shared::rect::Rect,
 }
 
 fn main() {
@@ -87,14 +91,43 @@ fn main() {
         .parse()
         .expect("Invalid SHARD_ID");
 
+    let bound_x: f32 = std::env::var("DS_BOUND_X")
+        .unwrap_or_else(|_| shared::MAP_BOUND_MIN.to_string())
+        .parse()
+        .unwrap();
+    let bound_y: f32 = std::env::var("DS_BOUND_Y")
+        .unwrap_or_else(|_| shared::MAP_BOUND_MIN.to_string())
+        .parse()
+        .unwrap();
+    let bound_w: f32 = std::env::var("DS_BOUND_W")
+        .unwrap_or_else(|_| shared::MAP_SIZE.to_string())
+        .parse()
+        .unwrap();
+    let bound_h: f32 = std::env::var("DS_BOUND_H")
+        .unwrap_or_else(|_| shared::MAP_SIZE.to_string())
+        .parse()
+        .unwrap();
+
+    let parent_shard_id: u32 = std::env::var("DS_PARENT_SHARD_ID")
+        .unwrap_or_else(|_| "0".to_string())
+        .parse()
+        .expect("Invalid PARENT_SHARD_ID");
+
     let config = ServerConfig {
         id: shard_id,
+        parent_shard_id,
         ip: "127.0.0.1".to_string(), // Only local IP for this lab - might need to be changed for a env variable in a real deployment
         port,
         zone,
         max_players,
         orchestrator_addr,
         broker_addr,
+        bounds: shared::rect::Rect {
+            x: bound_x,
+            y: bound_y,
+            width: bound_w,
+            height: bound_h,
+        },
     };
 
     // BIND UDP SOCKET FOR HEARTBEAT
@@ -127,6 +160,7 @@ fn main() {
         )
         .add_plugins(NetworkPlugin)
         .add_plugins(HeartbeatPlugin)
+        .add_plugins(FoodPlugin)
         .insert_resource(config)
         .insert_resource(HeartbeatSocket(socket))
         .insert_resource(NetworkManager {
@@ -134,7 +168,8 @@ fn main() {
             broker_connection: None,
             reliable_stream: None,
             unreliable_stream: None,
-            buffer: Vec::new(),
+            reliable_buffer: Vec::new(),
+            unreliable_buffer: Vec::new(),
         })
         .insert_resource(ShardId(shard_id))
         .run();

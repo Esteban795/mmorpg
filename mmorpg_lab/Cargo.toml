@@ -6,9 +6,24 @@ members = [
     "orchestrator",
     "gatekeeper",
     "shared",
-    "broker"
-, "spatialserver"
-, "game_sockets", "fakebroker", "chat"]
+    "broker",
+    "spatialserver",
+    "game_sockets", 
+    "fakebroker", 
+    "chat",
+]
+
+default-members = [
+    "client",
+    "dedicated_server",
+    "orchestrator",
+    "gatekeeper",
+    "shared",
+    "broker",
+    "spatialserver",
+    "game_sockets",
+    "chat",
+]
 
 [profile.release]
 opt-level = 3

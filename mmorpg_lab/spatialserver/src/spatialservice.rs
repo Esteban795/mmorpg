@@ -3,12 +3,12 @@ use std::collections::HashMap;
 use tracing::{error, info, warn};
 
 use crate::quadtree::{QuadTree, SplitData};
-use crate::rect::{Rect, Vec2};
 use crate::util::{get_added_ids, get_removed_ids};
 use bytes::Bytes;
 use game_sockets::{GameNetworkEvent, GamePeer, protocols::QuicBackend};
 use shared::broker_protocol::{BrokerMessage, TAG_CLIENT_TYPE_SPATIAL_SERVER, string_to_topic};
 use shared::orchestrator_protocol::OrchestratorMessage;
+use shared::rect::{Rect, Vec2};
 
 use shared::{MAP_BOUND_MIN, MAP_SIZE};
 
@@ -287,12 +287,17 @@ impl SpatialService {
 
     fn handle_broker_message(&mut self, message: BrokerMessage) {
         match message {
-            BrokerMessage::PositionUpdate { client_id, x, y } => {
+            BrokerMessage::PositionUpdate {
+                client_id,
+                x,
+                y,
+                score,
+            } => {
                 // info!(
-                //     "Received PositionUpdate from broker for client {}: x={}, y={}",
-                //     client_id, x, y
+                //     "Received PositionUpdate from broker for client {}: x={}, y={} with score {}",
+                //     client_id, x, y, score
                 // );
-                self.handle_position_update(client_id, Vec2 { x, y });
+                self.handle_position_update(client_id, Vec2 { x, y }, score);
             }
             BrokerMessage::ShardReady { shard_id } => {
                 info!(
@@ -330,7 +335,7 @@ impl SpatialService {
         }
     }
 
-    pub fn handle_position_update(&mut self, client_id: u32, pos: Vec2) {
+    pub fn handle_position_update(&mut self, client_id: u32, pos: Vec2, score: f32) {
         let old_network_shard = self.client_shards.get(&client_id).copied();
 
         self.quad_tree.remove_player(client_id);
@@ -398,6 +403,9 @@ impl SpatialService {
 
             // Crossing alert check :
             // if the player is near the border of its shard, we check if there are nearby shards and send an alert to the broker
+
+            // Adapt the margin based on the player's score to avoid having players too big that they should be seen in multiple shards
+            // but their position isn't already in a margin and does not trigger crossing alerts
             let shards_near = self.quad_tree.shards_near(&pos, MARGIN);
 
             let old_nearby = self
@@ -430,6 +438,7 @@ impl SpatialService {
         let msg = OrchestratorMessage::RequestSplit {
             shard_id: split_data.parent_shard_id,
             new_shards_ids: split_data.new_shards_ids,
+            parent_bounds: split_data.parent_bounds,
         };
 
         if let Some(quic_orchestrator) = &self.quic_orchestrator {

@@ -11,6 +11,9 @@ pub const TAG_SHARD_READY: u8 = 0x11;
 pub const TAG_NEW_SPAWN_SHARD: u8 = 0x12;
 pub const TAG_PLAYER_DISCONNECTED: u8 = 0x13;
 pub const TAG_CLIENT_TYPE: u8 = 0x14;
+pub const TAG_PUBLISH_RELIABLE: u8 = 0x06;
+pub const TAG_DIRECT_RELIABLE: u8 = 0x07;
+
 // Spatial Server messages
 pub const TAG_CROSSING_ALERT: u8 = 0x25;
 pub const TAG_AUTHORITY_SWITCH: u8 = 0x26;
@@ -23,6 +26,9 @@ pub const TAG_INTER_SHARD_MESSAGE: u8 = 0x30;
 pub const TAG_HANDOFF_REQUEST: u8 = 0x20;
 pub const TAG_GHOST_UPDATE: u8 = 0x23;
 pub const TAG_HANDOFF_COMPLETE: u8 = 0x24;
+// Split takeover spawned entities
+pub const TAG_FOOD_TAKEOVER_REQUEST: u8 = 0x2A;
+pub const TAG_FOOD_TAKEOVER_RESPONSE: u8 = 0x2B;
 
 // Chat message tags
 pub const TAG_CLIENT_CHAT_MESSAGE: u8 = 0x40;
@@ -56,6 +62,14 @@ pub enum BrokerMessage {
         topic: [u8; 32],
         payload: Vec<u8>,
     },
+    PublishReliable {
+        topic: [u8; 32],
+        payload: Vec<u8>,
+    },
+    DirectMessageReliable {
+        client_id: u32,
+        payload: Vec<u8>,
+    },
     Broadcast {
         payload: Vec<u8>,
     },
@@ -79,6 +93,7 @@ pub enum BrokerMessage {
         client_id: u32,
         x: f32,
         y: f32,
+        score: f32,
     },
     ShardReady {
         shard_id: u32,
@@ -138,16 +153,34 @@ impl BrokerMessage {
                 buf.put_u16_le(payload.len() as u16);
                 buf.put_slice(payload);
             }
+            BrokerMessage::PublishReliable { topic, payload } => {
+                buf.put_u8(TAG_PUBLISH_RELIABLE);
+                buf.put_slice(topic);
+                buf.put_u16_le(payload.len() as u16);
+                buf.put_slice(payload);
+            }
+            BrokerMessage::DirectMessageReliable { client_id, payload } => {
+                buf.put_u8(TAG_DIRECT_RELIABLE);
+                buf.put_u32_le(*client_id);
+                buf.put_u16_le(payload.len() as u16);
+                buf.put_slice(payload);
+            }
             BrokerMessage::ClientInput { client_id, input } => {
                 buf.put_u8(TAG_CLIENT_INPUT);
                 buf.put_u32_le(*client_id);
                 buf.put_slice(input);
             }
-            BrokerMessage::PositionUpdate { client_id, x, y } => {
+            BrokerMessage::PositionUpdate {
+                client_id,
+                x,
+                y,
+                score,
+            } => {
                 buf.put_u8(TAG_POSITION_UPDATE);
                 buf.put_u32_le(*client_id);
                 buf.put_f32_le(*x);
                 buf.put_f32_le(*y);
+                buf.put_f32_le(*score);
             }
             BrokerMessage::CrossingAlert {
                 client_id,
@@ -285,6 +318,33 @@ impl BrokerMessage {
                 buf.copy_to_slice(&mut payload);
                 Some(BrokerMessage::Broadcast { payload })
             }
+            TAG_PUBLISH_RELIABLE => {
+                if buf.remaining() < 34 {
+                    return None;
+                }
+                let mut topic = [0u8; 32];
+                buf.copy_to_slice(&mut topic);
+                let payload_len = buf.get_u16_le() as usize;
+                if buf.remaining() < payload_len {
+                    return None;
+                }
+                let mut payload = vec![0u8; payload_len];
+                buf.copy_to_slice(&mut payload);
+                Some(BrokerMessage::PublishReliable { topic, payload })
+            }
+            TAG_DIRECT_RELIABLE => {
+                if buf.remaining() < 6 {
+                    return None;
+                }
+                let client_id = buf.get_u32_le();
+                let payload_len = buf.get_u16_le() as usize;
+                if buf.remaining() < payload_len {
+                    return None;
+                }
+                let mut payload = vec![0u8; payload_len];
+                buf.copy_to_slice(&mut payload);
+                Some(BrokerMessage::DirectMessageReliable { client_id, payload })
+            }
             TAG_CLIENT_INPUT => {
                 if buf.remaining() < 20 {
                     return None;
@@ -295,13 +355,19 @@ impl BrokerMessage {
                 Some(BrokerMessage::ClientInput { client_id, input })
             }
             TAG_POSITION_UPDATE => {
-                if buf.remaining() < 12 {
+                if buf.remaining() < 16 {
                     return None;
                 }
                 let client_id = buf.get_u32_le();
                 let x = buf.get_f32_le();
                 let y = buf.get_f32_le();
-                Some(BrokerMessage::PositionUpdate { client_id, x, y })
+                let score = buf.get_f32_le();
+                Some(BrokerMessage::PositionUpdate {
+                    client_id,
+                    x,
+                    y,
+                    score,
+                })
             }
             TAG_CROSSING_ALERT => {
                 if buf.remaining() < 68 {
@@ -464,8 +530,24 @@ impl BrokerMessage {
                         u16::from_le_bytes([buffer[offset + 1], buffer[offset + 2]]) as usize;
                     msg_len += 2 + payload_len;
                 }
+                TAG_PUBLISH_RELIABLE => {
+                    if buffer.len() - offset < 35 {
+                        break;
+                    }
+                    let payload_len =
+                        u16::from_le_bytes([buffer[offset + 33], buffer[offset + 34]]) as usize;
+                    msg_len += 34 + payload_len;
+                }
+                TAG_DIRECT_RELIABLE => {
+                    if buffer.len() - offset < 7 {
+                        break;
+                    }
+                    let payload_len =
+                        u16::from_le_bytes([buffer[offset + 5], buffer[offset + 6]]) as usize;
+                    msg_len += 6 + payload_len;
+                }
                 TAG_CLIENT_INPUT => msg_len += 20,
-                TAG_POSITION_UPDATE => msg_len += 12,
+                TAG_POSITION_UPDATE => msg_len += 16,
                 TAG_CROSSING_ALERT | TAG_AUTHORITY_SWITCH | TAG_CROSSING_EXIT => msg_len += 68,
                 TAG_INTER_SHARD_MESSAGE => {
                     if buffer.len() - offset < 67 {
@@ -519,6 +601,7 @@ pub enum InterShardPayload {
         vel_x: f32,
         vel_y: f32,
         state: [u8; 64],
+        score: f32,
     },
     GhostUpdate {
         entity_id: u32,
@@ -526,9 +609,19 @@ pub enum InterShardPayload {
         pos_y: f32,
         vel_x: f32,
         vel_y: f32,
+        score: f32,
     },
     HandoffComplete {
         entity_id: u32,
+    },
+    FoodTakeoverRequest {
+        bounds_x: f32,
+        bounds_y: f32,
+        bounds_w: f32,
+        bounds_h: f32,
+    },
+    FoodTakeoverResponse {
+        payload: Vec<u8>,
     },
 }
 
@@ -543,6 +636,7 @@ impl InterShardPayload {
                 vel_x,
                 vel_y,
                 state,
+                score,
             } => {
                 buf.put_u8(TAG_HANDOFF_REQUEST);
                 buf.put_u32_le(*entity_id);
@@ -551,6 +645,7 @@ impl InterShardPayload {
                 buf.put_f32_le(*vel_x);
                 buf.put_f32_le(*vel_y);
                 buf.put_slice(state);
+                buf.put_f32_le(*score);
             }
             InterShardPayload::GhostUpdate {
                 entity_id,
@@ -558,6 +653,7 @@ impl InterShardPayload {
                 pos_y,
                 vel_x,
                 vel_y,
+                score,
             } => {
                 buf.put_u8(TAG_GHOST_UPDATE);
                 buf.put_u32_le(*entity_id);
@@ -565,10 +661,28 @@ impl InterShardPayload {
                 buf.put_f32_le(*pos_y);
                 buf.put_f32_le(*vel_x);
                 buf.put_f32_le(*vel_y);
+                buf.put_f32_le(*score);
             }
             InterShardPayload::HandoffComplete { entity_id } => {
                 buf.put_u8(TAG_HANDOFF_COMPLETE);
                 buf.put_u32_le(*entity_id);
+            }
+            InterShardPayload::FoodTakeoverRequest {
+                bounds_x,
+                bounds_y,
+                bounds_w,
+                bounds_h,
+            } => {
+                buf.put_u8(TAG_FOOD_TAKEOVER_REQUEST);
+                buf.put_f32_le(*bounds_x);
+                buf.put_f32_le(*bounds_y);
+                buf.put_f32_le(*bounds_w);
+                buf.put_f32_le(*bounds_h);
+            }
+            InterShardPayload::FoodTakeoverResponse { payload } => {
+                buf.put_u8(TAG_FOOD_TAKEOVER_RESPONSE);
+                buf.put_u16_le(payload.len() as u16);
+                buf.put_slice(payload);
             }
         }
         buf.freeze().to_vec()
@@ -583,7 +697,7 @@ impl InterShardPayload {
 
         match tag {
             TAG_HANDOFF_REQUEST => {
-                if buf.remaining() < 84 {
+                if buf.remaining() < 88 {
                     return None;
                 }
                 let entity_id = buf.get_u32_le();
@@ -593,6 +707,7 @@ impl InterShardPayload {
                 let vel_y = buf.get_f32_le();
                 let mut state = [0u8; 64];
                 buf.copy_to_slice(&mut state);
+                let score = buf.get_f32_le();
                 Some(InterShardPayload::HandoffRequest {
                     entity_id,
                     pos_x,
@@ -600,10 +715,11 @@ impl InterShardPayload {
                     vel_x,
                     vel_y,
                     state,
+                    score,
                 })
             }
             TAG_GHOST_UPDATE => {
-                if buf.remaining() < 20 {
+                if buf.remaining() < 24 {
                     return None;
                 }
                 let entity_id = buf.get_u32_le();
@@ -611,12 +727,14 @@ impl InterShardPayload {
                 let pos_y = buf.get_f32_le();
                 let vel_x = buf.get_f32_le();
                 let vel_y = buf.get_f32_le();
+                let score = buf.get_f32_le();
                 Some(InterShardPayload::GhostUpdate {
                     entity_id,
                     pos_x,
                     pos_y,
                     vel_x,
                     vel_y,
+                    score,
                 })
             }
             TAG_HANDOFF_COMPLETE => {
@@ -625,6 +743,29 @@ impl InterShardPayload {
                 }
                 let entity_id = buf.get_u32_le();
                 Some(InterShardPayload::HandoffComplete { entity_id })
+            }
+            TAG_FOOD_TAKEOVER_REQUEST => {
+                if buf.remaining() < 16 {
+                    return None;
+                }
+                Some(InterShardPayload::FoodTakeoverRequest {
+                    bounds_x: buf.get_f32_le(),
+                    bounds_y: buf.get_f32_le(),
+                    bounds_w: buf.get_f32_le(),
+                    bounds_h: buf.get_f32_le(),
+                })
+            }
+            TAG_FOOD_TAKEOVER_RESPONSE => {
+                if buf.remaining() < 2 {
+                    return None;
+                }
+                let len = buf.get_u16_le() as usize;
+                if buf.remaining() < len {
+                    return None;
+                }
+                let mut payload = vec![0u8; len];
+                buf.copy_to_slice(&mut payload);
+                Some(InterShardPayload::FoodTakeoverResponse { payload })
             }
             _ => None,
         }

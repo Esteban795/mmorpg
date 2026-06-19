@@ -47,4 +47,26 @@ impl Rect {
             || self.y > other.y + other.height
             || self.y + self.height < other.y)
     }
+
+    pub fn to_bytes(&self) -> [u8; 16] {
+        let mut buf = [0u8; 16];
+        buf[0..4].copy_from_slice(&self.x.to_le_bytes());
+        buf[4..8].copy_from_slice(&self.y.to_le_bytes());
+        buf[8..12].copy_from_slice(&self.width.to_le_bytes());
+        buf[12..16].copy_from_slice(&self.height.to_le_bytes());
+        buf
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Self {
+        let x = f32::from_le_bytes(bytes[0..4].try_into().unwrap());
+        let y = f32::from_le_bytes(bytes[4..8].try_into().unwrap());
+        let width = f32::from_le_bytes(bytes[8..12].try_into().unwrap());
+        let height = f32::from_le_bytes(bytes[12..16].try_into().unwrap());
+        Rect {
+            x,
+            y,
+            width,
+            height,
+        }
+    }
 }

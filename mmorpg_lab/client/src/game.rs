@@ -4,9 +4,9 @@ use shared::ClientMessage;
 use shared::broker_protocol::BrokerMessage;
 use std::collections::HashMap;
 
+use crate::chatbox::{ChatPlugin, ChatState};
 use crate::network::ClientNetworkManager;
 use crate::state::AppState;
-use crate::chatbox::{ChatPlugin, ChatState};
 use shared::MAP_SIZE;
 
 pub struct GamePlugin;
@@ -15,16 +15,21 @@ pub struct GamePlugin;
 pub struct GameState {
     pub my_id: Option<u32>,
     pub spawned_players: HashMap<u32, (Entity, f64)>, // maps client ID to the corresponding player entity in the world with its last update timestamp (for interpolation)
+    pub spawned_food: HashMap<u32, (Entity, f64)>, // same for food, maps food ID to entity and last update timestamp
 }
 
 #[derive(Component)] // Component to store the server's target position for interpolation
-pub struct TargetPosition {
+pub struct TargetTransform {
     pub x: f32,
     pub y: f32,
+    pub scale: f32,
 }
 
 #[derive(Component)]
 pub struct PlayerComponent; // Tag component to identify player entities
+
+#[derive(Component)]
+pub struct PlayerNameText; // Tag component to identify the Text2dBundle that displays the player's name above their head
 
 impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
@@ -33,16 +38,17 @@ impl Plugin for GamePlugin {
             .add_systems(OnEnter(AppState::InGame), setup_map)
             .add_systems(
                 Update,
-                (player_input, smooth_movement, move_camera).run_if(in_state(AppState::InGame)),
+                (player_input, smooth_transform, move_camera).run_if(in_state(AppState::InGame)),
             );
     }
 }
 
-fn setup_map(mut commands: Commands) {
+fn setup_map(mut commands: Commands, asset_server: Res<AssetServer>) {
     // Floor
     commands.spawn((
         Sprite {
-            color: Color::srgb(0.2, 0.5, 0.2),
+            image: asset_server.load("Purple_Nebula_05-1024x1024.png"),
+            //color: Color::srgb(0.2, 0.5, 0.2),
             custom_size: Some(Vec2::new(MAP_SIZE, MAP_SIZE)),
             ..default()
         },
@@ -56,11 +62,10 @@ fn player_input(
     game_state: Res<GameState>,
     chat_state: Res<ChatState>,
 ) {
-
     if chat_state.is_focused {
         return;
     }
-    
+
     let mut x = 0.0;
     let mut y = 0.0;
 
@@ -120,16 +125,30 @@ fn move_camera(
     }
 }
 
-fn smooth_movement(time: Res<Time>, mut query: Query<(&mut Transform, &TargetPosition)>) {
+fn smooth_transform(
+    time: Res<Time>,
+    mut query: Query<(&mut Transform, &TargetTransform, &Children)>,
+    mut text_query: Query<&mut Transform, (With<PlayerNameText>, Without<TargetTransform>)>,
+) {
     // the higher the lerp_factor, the snappier the movement (less interpolation).
     // The lower, the smoother but more delayed. We can adjust it based on the network conditions or player preferences.
     let lerp_factor = 10.0 * time.delta_secs();
 
-    for (mut transform, target) in &mut query {
+    for (mut transform, target, children) in &mut query {
         let target_y = target.y;
         let target_vec = Vec3::new(target.x, -target_y, transform.translation.z);
-
-        // Interpolate the current position towards the target position using linear interpolation (lerp)
         transform.translation = transform.translation.lerp(target_vec, lerp_factor);
+
+        let current_scale = transform.scale.x;
+        let new_scale = current_scale + (target.scale - current_scale) * lerp_factor;
+        transform.scale = Vec3::new(new_scale, new_scale, 1.0);
+
+        for child in children.iter() {
+            if let Ok(mut text_transform) = text_query.get_mut(child) {
+                text_transform.scale = Vec3::new(1.0 / new_scale, 1.0 / new_scale, 1.0);
+
+                text_transform.translation.y = 1.0 + (20.0 / new_scale);
+            }
+        }
     }
 }

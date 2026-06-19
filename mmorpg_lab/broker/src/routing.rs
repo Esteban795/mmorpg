@@ -64,7 +64,14 @@ pub fn process_network_events(
                 state
                     .connection_unreliable_streams
                     .remove(&conn.connection_id);
-                state.connection_buffers.remove(&conn.connection_id);
+
+                // Remove any buffers associated with this connection to free memory
+                state
+                    .connection_reliable_buffers
+                    .remove(&conn.connection_id);
+                state
+                    .connection_unreliable_buffers
+                    .remove(&conn.connection_id);
 
                 if let Some(id) = state.uuid_to_id.remove(&conn.connection_id) {
                     state.id_to_uuid.remove(&id);
@@ -131,10 +138,17 @@ pub fn process_network_events(
                 stream,
                 data,
             } => {
-                let buffer = state
-                    .connection_buffers
-                    .entry(connection.connection_id)
-                    .or_default();
+                let buffer = if stream.is_reliable() {
+                    state
+                        .connection_reliable_buffers
+                        .entry(connection.connection_id)
+                        .or_default()
+                } else {
+                    state
+                        .connection_unreliable_buffers
+                        .entry(connection.connection_id)
+                        .or_default()
+                };
 
                 buffer.extend_from_slice(&data);
                 let messages = BrokerMessage::parse_multiple(buffer);
@@ -266,6 +280,52 @@ pub fn process_network_events(
                                 }
                                 // Commented to reduce log noise - AOI publishing is verified by [NETWORK-20Hz] logs
                                 // debug!("[BROKER] Published AOI to {} subscriber(s).", count);
+                            }
+                        }
+
+                        // Receive PublishReliable message from shard and forward it to subscribers like a normal Publish,
+                        // but using the reliable stream instead of the unreliable one.
+                        // Used for critical updates that must not be dropped, like shard-to-shard handoff coordination messages.
+                        BrokerMessage::PublishReliable { topic, payload } => {
+                            if let Some(subscribers) = state.topic_subscribers.get(&topic) {
+                                let out_msg = BrokerMessage::Broadcast {
+                                    payload: payload.clone(),
+                                }
+                                .to_bytes();
+                                let bytes = Bytes::from(out_msg);
+
+                                for client_id in subscribers.iter().copied() {
+                                    if let Some(&client_uuid) = state.id_to_uuid.get(&client_id) {
+                                        if let Some(client_stream) =
+                                            state.connection_reliable_streams.get(&client_uuid)
+                                        {
+                                            let _ = network.peer.send(
+                                                &client_uuid.into(),
+                                                client_stream,
+                                                bytes.clone(),
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // DirectMessageReliable is used for direct shard-to-client messages that must not be dropped, like critical state updates during handoff.
+                        // The Broker forwards the message directly to the specified client without going through the topic subscription system.
+                        // Used to send specific messages to a specific client whithout overloading other clients
+                        // (eg: when a client joins, the shard sends all the food Data to the player then reliable broadcast events updates them)
+                        BrokerMessage::DirectMessageReliable { client_id, payload } => {
+                            if let Some(&client_uuid) = state.id_to_uuid.get(&client_id) {
+                                if let Some(client_stream) =
+                                    state.connection_reliable_streams.get(&client_uuid)
+                                {
+                                    let out_msg = BrokerMessage::Broadcast { payload }.to_bytes();
+                                    let _ = network.peer.send(
+                                        &client_uuid.into(),
+                                        client_stream,
+                                        Bytes::from(out_msg),
+                                    );
+                                }
                             }
                         }
 
@@ -424,11 +484,21 @@ pub fn process_network_events(
                         }
 
                         //Position updates from shards to the spatial server.
-                        BrokerMessage::PositionUpdate { client_id, x, y } => {
+                        BrokerMessage::PositionUpdate {
+                            client_id,
+                            x,
+                            y,
+                            score,
+                        } => {
                             diagnostics.position_updates_received += 1;
 
-                            let forward_msg =
-                                BrokerMessage::PositionUpdate { client_id, x, y }.to_bytes();
+                            let forward_msg = BrokerMessage::PositionUpdate {
+                                client_id,
+                                x,
+                                y,
+                                score,
+                            }
+                            .to_bytes();
                             spatial_batch.extend_from_slice(&forward_msg);
                             pos_updates_count += 1;
 
@@ -438,7 +508,7 @@ pub fn process_network_events(
                                     state.connection_unreliable_streams.get(&spatial_uuid)
                                 {
                                     let forward_msg =
-                                        BrokerMessage::PositionUpdate { client_id, x, y }
+                                        BrokerMessage::PositionUpdate { client_id, x, y, score }
                                             .to_bytes();
                                     match network.peer.send(
                                         &spatial_uuid.into(),

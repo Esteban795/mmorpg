@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 bevy = "0.18.1"
 serde = { version = "1.0.228", features = ["derive"] }
+rand = "0.8"
 
 # Network dependencies
 postcard = { version = "1.0.0", features = ["alloc"] }
