@@ -9,6 +9,8 @@ use crate::network::ClientNetworkManager;
 use crate::state::AppState;
 use shared::MAP_SIZE;
 
+const BASE_PLAYER_RADIUS: f32 = 15.0; // Base radius for a player with score 0, can be adjusted as needed. SAME in SERVER, need to be consistent
+
 #[derive(Resource, Default)]
 pub struct GameState {
     pub my_id: Option<u32>,
@@ -208,7 +210,7 @@ pub fn spawn_player(
         player_data.username.clone()
     };
 
-    let base_radius = 15.0; // Default radius for a player with score 0
+    let base_radius = BASE_PLAYER_RADIUS; // Default radius for a player with score 0
     let current_radius = base_radius + player_data.score;
 
     let entity =

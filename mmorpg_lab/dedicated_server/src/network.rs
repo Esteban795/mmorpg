@@ -10,7 +10,13 @@ use shared::{ClientMessage, PlayerState, ServerMessage};
 use std::collections::HashMap;
 use tracing::{error, info, warn};
 
+use crate::food::{FoodEatenMessage, FoodRegistry, FoodSpawnedMessage};
+
 use crate::ServerConfig;
+
+const BASE_PLAYER_SPEED: f32 = 5.0;
+const BASE_PLAYER_RADIUS: f32 = 15.0; // Base radius for a player with score 0, can be adjusted as needed. SAME in CLIENT, need to be consistent
+const SCORE_GAIN_PER_FOOD: f32 = 0.5; // Score gained by a player when eating a food item, can be adjusted as needed
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum EntityState {
@@ -50,7 +56,8 @@ impl Plugin for NetworkPlugin {
             Update,
             (
                 poll_network_events,
-                process_collisions,
+                process_food_collisions,
+                process_player_collisions,
                 broadcast_network_updates,
             )
                 .chain(),
@@ -62,7 +69,7 @@ fn poll_network_events(
     mut net: ResMut<NetworkManager>,
     mut registry: ResMut<PlayerRegistry>,
     config: Res<ServerConfig>,
-    mut food_registry: ResMut<crate::food::FoodRegistry>,
+    mut food_registry: ResMut<FoodRegistry>,
 ) {
     while let Ok(Some(event)) = net.peer.poll() {
         match event {
@@ -137,9 +144,12 @@ fn poll_network_events(
                             topic_from: string_to_topic(&config.zone),
                             payload: req.to_bytes(),
                         };
-                        let _ = net
-                            .peer
-                            .send(&_connection, &stream, Bytes::from(msg.to_bytes()));
+                        if let Err(e) =
+                            net.peer
+                                .send(&_connection, &stream, Bytes::from(msg.to_bytes()))
+                        {
+                            error!("Failed to send reliable message asking for food: {:?}", e);
+                        }
                     }
 
                     net.reliable_stream = Some(stream);
@@ -241,7 +251,7 @@ fn handle_broker_message(
                         );
 
                         // Send current food data to the new player
-                        if !(net.broker_connection.is_none() || net.reliable_stream.is_none()) {
+                        if net.broker_connection.is_some() && net.reliable_stream.is_some() {
                             let all_food: Vec<shared::FoodData> =
                                 food_registry.food.values().cloned().collect();
                             if !all_food.is_empty() {
@@ -255,7 +265,14 @@ fn handle_broker_message(
                                     if let (Some(conn), Some(stream)) =
                                         (&net.broker_connection, &net.reliable_stream)
                                     {
-                                        let _ = net.peer.send(conn, stream, Bytes::from(food_msg));
+                                        if let Err(e) =
+                                            net.peer.send(&conn, &stream, Bytes::from(food_msg))
+                                        {
+                                            error!(
+                                                "Failed to send reliable message asking for food: {:?}",
+                                                e
+                                            );
+                                        }
                                     }
                                 }
                             }
@@ -268,7 +285,7 @@ fn handle_broker_message(
                     }
                     ClientMessage::MoveInput { x, y } => {
                         if let Some(player) = registry.players.get_mut(&client_id) {
-                            let base_speed = 5.0;
+                            let base_speed = BASE_PLAYER_SPEED;
                             let current_speed =
                                 (base_speed / (1.0 + (player.score * 0.005))).max(1.0);
 
@@ -468,7 +485,14 @@ fn handle_broker_message(
                                     if let (Some(conn), Some(stream)) =
                                         (&net.broker_connection, &net.reliable_stream)
                                     {
-                                        let _ = net.peer.send(conn, stream, Bytes::from(food_msg));
+                                        if let Err(e) =
+                                            net.peer.send(&conn, &stream, Bytes::from(food_msg))
+                                        {
+                                            error!(
+                                                "Failed to send reliable message sending foodData: {:?}",
+                                                e
+                                            );
+                                        }
                                     }
                                 }
                             }
@@ -600,8 +624,8 @@ fn broadcast_network_updates(
     net: ResMut<NetworkManager>,
     player_registry: Res<PlayerRegistry>,
     config: Res<ServerConfig>,
-    mut spawn_events: MessageReader<crate::food::FoodSpawnedMessage>,
-    mut eaten_events: MessageReader<crate::food::FoodEatenMessage>,
+    mut spawn_events: MessageReader<FoodSpawnedMessage>,
+    mut eaten_events: MessageReader<FoodEatenMessage>,
     mut local_frame_count: Local<u64>,
 ) {
     *local_frame_count += 1;
@@ -742,81 +766,29 @@ fn broadcast_network_updates(
         let _ = net.peer.send(broker_conn, rel_stream, Bytes::from(bytes));
     }
 
-    /*
-    // Background Sync of Food Data (every tick, with rotation if there is a lot of food)
-    // this is in addition to the immediate sync on spawn/despawn events, to ensure clients
-    //  eventually receive all food data even if they miss the event messages (late join or packet loss)
-    let total_food = food_registry.ordered_ids.len();
-
-    if total_food > 0 {
-        let cycle_frames = 100; // Number of frames to complete a full sync cycle
-        let current_slice_index = (*local_frame_count % cycle_frames) as usize;
-
-        let slice_size = (total_food / cycle_frames as usize).max(1);
-
-        let start_idx = current_slice_index * slice_size;
-        let mut end_idx = start_idx + slice_size;
-
-        if current_slice_index == cycle_frames as usize - 1 {
-            end_idx = total_food;
-        } else {
-            end_idx = end_idx.min(total_food);
-        }
-
-        if start_idx < total_food {
-            let slice_ids = &food_registry.ordered_ids[start_idx..end_idx];
-
-            let mut my_slice = Vec::with_capacity(slice_ids.len());
-            for id in slice_ids {
-                if let Some(food_data) = food_registry.food.get(id) {
-                    my_slice.push(food_data.clone());
-                }
-            }
-
-            if !my_slice.is_empty() {
-                let payload = bincode::serialize(&ServerMessage::FoodSync(my_slice)).unwrap();
-                let bytes = BrokerMessage::Publish {
-                    topic: my_topic,
-                    payload,
-                }
-                .to_bytes();
-
-                if batched_payload.len() + bytes.len() > 1000 {
-                    flush_buffer(&mut batched_payload);
-                }
-                batched_payload.extend_from_slice(&bytes);
-            }
-        }
-    }
-    */
-
     // Final flush after processing all updates
     flush_buffer(&mut batched_payload);
 }
 
 // -------------------------------------------------------------------------
-// Process collisions between players and food, and between players themselves. Update scores, remove eaten food, and handle player deaths.
+// Process collisions between players and food. Update scores and remove eaten food
 // --------------------------------------------------------------------------
-pub fn process_collisions(
+pub fn process_food_collisions(
     mut registry: ResMut<PlayerRegistry>,
-    mut food_registry: ResMut<crate::food::FoodRegistry>,
-    mut eaten_writer: MessageWriter<crate::food::FoodEatenMessage>,
-    net: ResMut<NetworkManager>,
+    mut food_registry: ResMut<FoodRegistry>,
+    mut eaten_writer: MessageWriter<FoodEatenMessage>,
 ) {
     let mut eaten_food = HashSet::new();
-    let mut players_to_kill = HashSet::new();
     let mut score_gains = HashMap::new();
 
-    // ==========================================
-    // Collision with food
-    // ==========================================
+    // Detects collisions with food
     for (client_id, player) in registry.players.iter() {
         // Ghosts cannot eat food in the shard
         if player.state == EntityState::Ghost {
             continue;
         }
 
-        let player_radius = 15.0 + player.score;
+        let player_radius = BASE_PLAYER_RADIUS + player.score;
         let player_pos = player.position;
 
         for (&food_id, food) in food_registry.food.iter() {
@@ -827,15 +799,40 @@ pub fn process_collisions(
             let food_pos = Vec2::new(food.x, food.y);
             if player_pos.distance(food_pos) < player_radius {
                 eaten_food.insert(food_id);
-                *score_gains.entry(*client_id).or_insert(0.0) += 0.5; // 1 point par bille
+                *score_gains.entry(*client_id).or_insert(0.0) += SCORE_GAIN_PER_FOOD;
             }
         }
     }
 
-    // ==========================================
-    // Collision between players
-    // ==========================================
+    // Apply Score Gains
+    for (id, gain) in score_gains {
+        if let Some(p) = registry.players.get_mut(&id) {
+            p.score += gain;
+        }
+    }
+
+    // Destroy eaten food and notify clients
+    for food_id in eaten_food {
+        if food_registry.food.remove(&food_id).is_some() {
+            food_registry.ordered_ids.retain(|&id| id != food_id);
+            eaten_writer.write(FoodEatenMessage(food_id));
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------------
+// Process collisions between players. Update scores and remove eaten players (death)
+// -----------------------------------------------------------------------------------
+pub fn process_player_collisions(
+    mut registry: ResMut<PlayerRegistry>,
+    net: ResMut<NetworkManager>,
+) {
+    let mut players_to_kill = HashSet::new();
+    let mut score_gains = HashMap::new();
+
     let player_ids: Vec<u32> = registry.players.keys().copied().collect();
+
+    // Detects collisions between players
     for i in 0..player_ids.len() {
         for j in (i + 1)..player_ids.len() {
             let id_a = player_ids[i];
@@ -844,20 +841,17 @@ pub fn process_collisions(
             let p_a = registry.players.get(&id_a).unwrap();
             let p_b = registry.players.get(&id_b).unwrap();
 
-            let radius_a = 15.0 + p_a.score;
-            let radius_b = 15.0 + p_b.score;
+            let radius_a = BASE_PLAYER_RADIUS + p_a.score;
+            let radius_b = BASE_PLAYER_RADIUS + p_b.score;
             let dist = p_a.position.distance(p_b.position);
 
-            // players are overlapping each other
             if dist < radius_a || dist < radius_b {
-                // A eats B since he is overlapping B and is at least 10% bigger
+                // A eats B
                 if radius_a >= radius_b * 1.10 && dist < radius_a {
                     if !players_to_kill.contains(&id_b) {
                         players_to_kill.insert(id_b);
-
-                        // owning shard attributes score
-                        if !(p_a.state == EntityState::Ghost) {
-                            *score_gains.entry(id_a).or_insert(0.0) += p_b.score * 0.5; // Take 50% of the eaten player's score as gain
+                        if p_a.state != EntityState::Ghost {
+                            *score_gains.entry(id_a).or_insert(0.0) += p_b.score * 0.5;
                         }
                     }
                 }
@@ -865,7 +859,7 @@ pub fn process_collisions(
                 else if radius_b >= radius_a * 1.10 && dist < radius_b {
                     if !players_to_kill.contains(&id_a) {
                         players_to_kill.insert(id_a);
-                        if !(p_b.state == EntityState::Ghost) {
+                        if p_b.state != EntityState::Ghost {
                             *score_gains.entry(id_b).or_insert(0.0) += p_a.score * 0.5;
                         }
                     }
@@ -874,32 +868,19 @@ pub fn process_collisions(
         }
     }
 
-    // ==========================================
-    // Apply results of collisions
-    // ==========================================
-
-    // Add scores
+    // Apply Score Gains
     for (id, gain) in score_gains {
         if let Some(p) = registry.players.get_mut(&id) {
             p.score += gain;
         }
     }
 
-    // destroy eaten food and notify clients
-    for food_id in eaten_food {
-        if food_registry.food.remove(&food_id).is_some() {
-            food_registry.ordered_ids.retain(|&id| id != food_id);
-            eaten_writer.write(crate::food::FoodEatenMessage(food_id));
-        }
-    }
-
-    // Player's deaths - remove them from the registry and notify clients
+    // Player deaths - remove them from the registry and notify clients
     for id in players_to_kill {
         if let Some(dead_player) = registry.players.remove(&id) {
-            if !(dead_player.state == EntityState::Ghost) {
+            if dead_player.state != EntityState::Ghost {
                 info!("Player {} has been eaten!", dead_player.username);
 
-                // Send GameOver message to the eaten client
                 if let (Some(conn), Some(stream)) = (&net.broker_connection, &net.reliable_stream) {
                     if let Ok(payload) = bincode::serialize(&shared::ServerMessage::GameOver) {
                         let msg = shared::broker_protocol::BrokerMessage::DirectMessageReliable {
