@@ -5,7 +5,7 @@ use game_sockets::{
     protocols::QuicBackend,
 };
 use shared::broker_protocol::BrokerMessage;
-use shared::{ClientMessage, ServerMessage};
+use shared::{BASE_PLAYER_RADIUS, ClientMessage, ServerMessage};
 
 use crate::chatbox::ChatState;
 use crate::game::{TargetTransform, spawn_food, spawn_player};
@@ -362,7 +362,7 @@ fn handle_aoi_snapshot(
     for p in players {
         current_frame_ids.push(p.id);
 
-        let current_radius = 15.0 + p.score;
+        let current_radius = BASE_PLAYER_RADIUS + p.score;
 
         if let Some(&mut (entity, ref mut last_seen)) = game_state.spawned_players.get_mut(&p.id) {
             // Existing player in AOI, update their position and last seen timestamp

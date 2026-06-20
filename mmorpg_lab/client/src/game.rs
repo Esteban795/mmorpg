@@ -7,9 +7,7 @@ use std::collections::HashMap;
 use crate::chatbox::{ChatPlugin, ChatState};
 use crate::network::ClientNetworkManager;
 use crate::state::AppState;
-use shared::MAP_SIZE;
-
-const BASE_PLAYER_RADIUS: f32 = 15.0; // Base radius for a player with score 0, can be adjusted as needed. SAME in SERVER, need to be consistent
+use shared::{BASE_PLAYER_RADIUS, MAP_SIZE};
 
 #[derive(Resource, Default)]
 pub struct GameState {

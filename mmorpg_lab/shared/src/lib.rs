@@ -22,6 +22,8 @@ pub const MAP_SIZE: f32 = 4000.0;
 pub const SPAWN_X: f32 = 32.0;
 pub const SPAWN_Y: f32 = 40.0;
 
+pub const BASE_PLAYER_RADIUS: f32 = 15.0; // Base radius for a player with score 0, can be adjusted as needed. SAME in SERVER, need to be consistent
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ClientMessage {
     //Use a custom fixed-size username to have enough room in the payload.
