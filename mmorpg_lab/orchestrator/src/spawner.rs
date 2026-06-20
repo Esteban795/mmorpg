@@ -13,19 +13,35 @@ const MAX_PORT: u16 = 9000;
 // const TICKING_INTERVAL_SECS: u64 = 5;
 // const BOOT_TIMEOUT_SECS: u64 = 20;
 
-pub async fn maintain_hot_servers(mut spawn_rx: mpsc::UnboundedReceiver<u32>) {
+pub async fn maintain_hot_servers(
+    mut spawn_rx: mpsc::UnboundedReceiver<(u32, u32, shared::rect::Rect)>,
+) {
     info!("Lazy Spawner started. Booting default lobby (shard:0)...");
 
     let mut port_cursor: u16 = STARTING_PORT;
 
     // Starts with a default lobby (shard:0) always up and running
     let initial_port = find_free_port(&mut port_cursor);
-    spawn_dedicated_server(initial_port, "shard:0", MAX_PLAYERS_PER_SERVER, 0).await;
+    let lobby_bounds = shared::rect::Rect {
+        x: shared::MAP_BOUND_MIN,
+        y: shared::MAP_BOUND_MIN,
+        width: shared::MAP_SIZE,
+        height: shared::MAP_SIZE,
+    };
+    spawn_dedicated_server(
+        initial_port,
+        "shard:0",
+        MAX_PLAYERS_PER_SERVER,
+        0,
+        0,
+        lobby_bounds,
+    )
+    .await;
     info!("Default lobby (shard:0) launched. Awaiting split requests from Spatial Server...");
 
     // Spawn hot servers on demand as split requests come in from the Spatial Server,
     // and assign them a given shard ID and a free port.
-    while let Some(new_shard_id) = spawn_rx.recv().await {
+    while let Some((new_shard_id, parent_shard_id, bounds)) = spawn_rx.recv().await {
         // ignores shard 0
         if new_shard_id == 0 {
             continue;
@@ -38,7 +54,15 @@ pub async fn maintain_hot_servers(mut spawn_rx: mpsc::UnboundedReceiver<u32>) {
         let free_port = find_free_port(&mut port_cursor);
         let zone_name = format!("shard:{}", new_shard_id);
 
-        spawn_dedicated_server(free_port, &zone_name, MAX_PLAYERS_PER_SERVER, new_shard_id).await;
+        spawn_dedicated_server(
+            free_port,
+            &zone_name,
+            MAX_PLAYERS_PER_SERVER,
+            new_shard_id,
+            parent_shard_id,
+            bounds,
+        )
+        .await;
     }
 }
 
@@ -65,7 +89,14 @@ fn find_free_port(cursor: &mut u16) -> u16 {
     }
 }
 
-async fn spawn_dedicated_server(port: u16, zone: &str, max_players: u16, shard_id: u32) {
+async fn spawn_dedicated_server(
+    port: u16,
+    zone: &str,
+    max_players: u16,
+    shard_id: u32,
+    parent_shard_id: u32,
+    bounds: shared::rect::Rect,
+) {
     info!("Booting Bevy server on port {} in zone {}", port, zone);
 
     let profile = if cfg!(debug_assertions) {
@@ -101,6 +132,11 @@ async fn spawn_dedicated_server(port: u16, zone: &str, max_players: u16, shard_i
         .env("DS_ZONE", zone)
         .env("DS_MAX_PLAYERS", max_players.to_string())
         .env("DS_SHARD_ID", shard_id.to_string())
+        .env("DS_PARENT_SHARD_ID", parent_shard_id.to_string())
+        .env("DS_BOUND_X", bounds.x.to_string())
+        .env("DS_BOUND_Y", bounds.y.to_string())
+        .env("DS_BOUND_W", bounds.width.to_string())
+        .env("DS_BOUND_H", bounds.height.to_string())
         .env("ORCH_ADDR", orch_addr)
         .env("BROKER_ADDR", broker_addr)
         .spawn()

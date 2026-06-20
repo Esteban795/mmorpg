@@ -5,10 +5,10 @@ use game_sockets::{
     protocols::QuicBackend,
 };
 use shared::broker_protocol::BrokerMessage;
-use shared::{ClientMessage, ServerMessage};
+use shared::{BASE_PLAYER_RADIUS, ClientMessage, ServerMessage};
 
 use crate::chatbox::ChatState;
-use crate::game::TargetPosition;
+use crate::game::{TargetTransform, spawn_food, spawn_player};
 use crate::loginmenu::ConnectionSettings;
 use crate::state::AppState;
 
@@ -20,12 +20,8 @@ pub struct ClientNetworkManager {
     pub server_connection: Option<GameConnection>,
     pub reliable_stream: Option<GameStream>,
     pub unreliable_stream: Option<GameStream>,
-}
-
-#[derive(Resource, Default)]
-pub struct ClientNetworkDiagnostics {
-    pub aoi_snapshots_received: u64,
-    pub last_aoi_player_count: usize,
+    pub reliable_buffer: Vec<u8>,
+    pub unreliable_buffer: Vec<u8>,
 }
 
 pub struct NetworkPlugin;
@@ -33,7 +29,6 @@ pub struct NetworkPlugin;
 impl Plugin for NetworkPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<ClientNetworkManager>()
-            .init_resource::<ClientNetworkDiagnostics>()
             .add_systems(OnEnter(AppState::InGame), start_connection)
             .add_systems(Update, handle_network.run_if(in_state(AppState::InGame)));
     }
@@ -68,10 +63,12 @@ fn handle_network(
     settings: Res<ConnectionSettings>,
     mut commands: Commands,
     mut game_state: ResMut<crate::game::GameState>,
-    mut targets: Query<&mut TargetPosition>,
+    mut targets: Query<&mut TargetTransform>,
     time: Res<Time>,
-    mut diagnostics: ResMut<ClientNetworkDiagnostics>,
     mut chat_state: ResMut<ChatState>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+    mut next_state: ResMut<NextState<AppState>>,
 ) {
     let current_time = time.elapsed_secs_f64();
 
@@ -97,17 +94,30 @@ fn handle_network(
                 GameNetworkEvent::StreamCreated(conn, stream) => {
                     handle_stream_created(conn, stream, &mut net, &settings);
                 }
-                GameNetworkEvent::Message { data, .. } => {
-                    handle_server_message(
-                        &data,
-                        &mut commands,
-                        &mut game_state,
-                        &mut targets,
-                        current_time,
-                        &mut net,
-                        &mut diagnostics,
-                        &mut chat_state,
-                    );
+                GameNetworkEvent::Message { stream, data, .. } => {
+                    let buffer = if stream.is_reliable() {
+                        &mut net.reliable_buffer
+                    } else {
+                        &mut net.unreliable_buffer
+                    };
+
+                    buffer.extend_from_slice(&data);
+
+                    for broker_msg in shared::broker_protocol::BrokerMessage::parse_multiple(buffer)
+                    {
+                        handle_server_message(
+                            broker_msg,
+                            &mut commands,
+                            &mut game_state,
+                            &mut targets,
+                            current_time,
+                            &mut net,
+                            &mut chat_state,
+                            &mut meshes,
+                            &mut materials,
+                            &mut next_state,
+                        );
+                    }
                 }
                 GameNetworkEvent::Disconnected(_) => {
                     info!("[CLIENT] : Disconnected from the server.");
@@ -119,11 +129,11 @@ fn handle_network(
     }
 
     // Despawn of entities for players we haven't seen for a while:
-    // If an entity in the HashMap hasn't been seen for more than 0.8 seconds (any AOI received), it is despawned and removed from the HashMap
+    // If an entity in the HashMap hasn't been seen for more than 0.5 seconds (any AOI received), it is despawned and removed from the HashMap
     game_state
         .spawned_players
         .retain(|_id, (entity, last_seen)| {
-            if current_time - *last_seen > 0.8 {
+            if current_time - *last_seen > 0.5 {
                 commands.entity(*entity).despawn();
                 false
             } else {
@@ -203,22 +213,18 @@ fn handle_stream_created(
 // This function processes messages received from the server. It deserializes the message and takes appropriate
 // actions based on its type (e.g., handling welcome messages or AOI snapshots).
 fn handle_server_message(
-    data: &[u8],
+    msg: BrokerMessage,
     commands: &mut Commands,
     game_state: &mut crate::game::GameState,
-    targets: &mut Query<&mut TargetPosition>,
+    targets: &mut Query<&mut TargetTransform>,
     current_time: f64,
     net: &mut ClientNetworkManager,
-    diagnostics: &mut ClientNetworkDiagnostics,
     chat_state: &mut ChatState,
+    meshes: &mut ResMut<Assets<Mesh>>,
+    materials: &mut ResMut<Assets<ColorMaterial>>,
+    next_state: &mut ResMut<NextState<AppState>>,
 ) {
-    // Deserialize the broker message from the received bytes. If deserialization fails, log a warning and ignore the message.
-    let Some(broker_message) = BrokerMessage::from_bytes(data) else {
-        warn!("[CLIENT] Invalid broker envelope received.");
-        return;
-    };
-
-    match broker_message {
+    match msg {
         BrokerMessage::Broadcast { payload } => {
             if let Ok(server_msg) = bincode::deserialize::<ServerMessage>(&payload) {
                 match server_msg {
@@ -268,10 +274,48 @@ fn handle_server_message(
                             game_state,
                             targets,
                             current_time,
-                            diagnostics,
+                            meshes,
+                            materials,
                         );
                     }
+                    ServerMessage::FoodSync(food_list) => {
+                        //debug!("[CLIENT] FoodSync received: {} items", food_list.len());
+
+                        for f in food_list {
+                            spawn_food(commands, meshes, materials, game_state, &f, current_time);
+                        }
+                    }
+                    ServerMessage::FoodEaten(eaten_ids) => {
+                        info!(
+                            "[CLIENT] FoodEaten received: {} items destroyed",
+                            eaten_ids.len()
+                        );
+                        for id in eaten_ids {
+                            if let Some((entity, _)) = game_state.spawned_food.remove(&id) {
+                                commands.entity(entity).despawn();
+                            }
+                        }
+                    }
+                    ServerMessage::GameOver => {
+                        info!("[CLIENT] You lost, return to the Menu...");
+
+                        for (_, (entity, _)) in game_state.spawned_players.drain() {
+                            commands.entity(entity).despawn();
+                        }
+                        for (_, (entity, _)) in game_state.spawned_food.drain() {
+                            commands.entity(entity).despawn();
+                        }
+                        game_state.my_id = None;
+
+                        net.server_connection = None;
+                        net.reliable_stream = None;
+                        net.unreliable_stream = None;
+
+                        next_state.set(AppState::LoginMenu);
+                    }
                 }
+            } else {
+                error!("[CLIENT] Failed to deserialize server message");
             }
         }
         BrokerMessage::BroadcastChatMessage { username, msg } => {
@@ -284,8 +328,10 @@ fn handle_server_message(
                 .trim_end_matches(char::from(0))
                 .to_string();
 
-
-            info!("[CLIENT] Chat message received from {}: {}", username_str, msg_str);
+            info!(
+                "[CLIENT] Chat message received from {}: {}",
+                username_str, msg_str
+            );
             // Add the received chat message to the chat history
             chat_state
                 .chat_history
@@ -303,29 +349,20 @@ fn handle_aoi_snapshot(
     players: Vec<shared::PlayerState>,
     commands: &mut Commands,
     game_state: &mut crate::game::GameState,
-    targets: &mut Query<&mut TargetPosition>,
+    targets: &mut Query<&mut TargetTransform>,
     current_time: f64,
-    diagnostics: &mut ClientNetworkDiagnostics,
+    meshes: &mut ResMut<Assets<Mesh>>,
+    materials: &mut ResMut<Assets<ColorMaterial>>,
 ) {
-    diagnostics.aoi_snapshots_received += 1;
-    diagnostics.last_aoi_player_count = players.len();
-
-    // Log every 20 snapshots (1 second at 20Hz) - comment out to reduce noise
-    if diagnostics.aoi_snapshots_received % 20 == 0 {
-        info!(
-            "[CLIENT] AOI snapshot #{} received with {} players",
-            diagnostics.aoi_snapshots_received,
-            players.len()
-        );
-    }
-
     // Uncomment for detailed per-snapshot logging:
-    // debug!(\"[CLIENT] Received AOI with {} players\", players.len());
+    // debug!("[CLIENT] Received AOI with {} players", players.len());
 
     let mut current_frame_ids = Vec::new();
 
     for p in players {
         current_frame_ids.push(p.id);
+
+        let current_radius = BASE_PLAYER_RADIUS + p.score;
 
         if let Some(&mut (entity, ref mut last_seen)) = game_state.spawned_players.get_mut(&p.id) {
             // Existing player in AOI, update their position and last seen timestamp
@@ -333,51 +370,11 @@ fn handle_aoi_snapshot(
             if let Ok(mut target) = targets.get_mut(entity) {
                 target.x = p.x;
                 target.y = p.y;
+                target.scale = current_radius;
             }
         } else {
             // new player in AOI, spawn an entity for them
-            let is_me = game_state.my_id == Some(p.id);
-            let color = if is_me {
-                Color::srgb(0.2, 0.2, 1.0)
-            } else {
-                Color::srgb(1.0, 0.2, 0.2)
-            };
-
-            // Display name truncated if too long
-            let display_name = if p.username.len() > 10 {
-                format!("{}...", &p.username[..8])
-            } else {
-                p.username
-            };
-
-            let entity = commands
-                .spawn((
-                    Sprite {
-                        color,
-                        custom_size: Some(Vec2::new(30.0, 30.0)),
-                        ..default()
-                    },
-                    Transform::from_xyz(p.x, p.y, 0.0),
-                    crate::game::PlayerComponent,
-                    crate::game::TargetPosition { x: p.x, y: p.y },
-                ))
-                .with_children(|parent| {
-                    // Display the player's username above their character
-                    parent.spawn((
-                        Text2d::new(display_name),
-                        TextFont {
-                            font_size: 15.0,
-                            ..default()
-                        },
-                        TextColor(Color::WHITE),
-                        Transform::from_xyz(0.0, 25.0, 1.0),
-                    ));
-                })
-                .id();
-
-            game_state
-                .spawned_players
-                .insert(p.id, (entity, current_time));
+            spawn_player(commands, meshes, materials, game_state, &p, current_time);
         }
     }
 }

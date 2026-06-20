@@ -4,11 +4,19 @@ use game_sockets::{GameConnection, GameNetworkEvent, GamePeer, GameStream, GameS
 use shared::broker_protocol::{BrokerMessage, InterShardPayload, string_to_topic};
 use shared::{MAP_BOUND_MAX, MAP_BOUND_MIN, SPAWN_X, SPAWN_Y};
 
+use std::collections::HashSet;
+
 use shared::{ClientMessage, PlayerState, ServerMessage};
 use std::collections::HashMap;
 use tracing::{error, info, warn};
 
+use crate::food::{FoodEatenMessage, FoodRegistry, FoodSpawnedMessage};
+
 use crate::ServerConfig;
+
+const BASE_PLAYER_SPEED: f32 = 5.0;
+const BASE_PLAYER_RADIUS: f32 = 15.0; // Base radius for a player with score 0, can be adjusted as needed. SAME in CLIENT, need to be consistent
+const SCORE_GAIN_PER_FOOD: f32 = 0.5; // Score gained by a player when eating a food item, can be adjusted as needed
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum EntityState {
@@ -22,6 +30,7 @@ pub struct PlayerData {
     pub position: Vec2,
     pub velocity: Vec2,
     pub state: EntityState,
+    pub score: f32,
 }
 
 #[derive(Resource, Default)]
@@ -35,40 +44,24 @@ pub struct NetworkManager {
     pub broker_connection: Option<GameConnection>,
     pub reliable_stream: Option<GameStream>,
     pub unreliable_stream: Option<GameStream>,
-    pub buffer: Vec<u8>,
-}
-
-#[derive(Resource, Default)]
-pub struct NetworkFrameCounter {
-    pub frame_count: u64,
-}
-
-#[derive(Resource, Default)]
-pub struct NetworkDiagnostics {
-    pub position_updates_attempted: u64,
-    pub position_updates_failed: u64,
-    pub aoi_broadcasts_sent: u64,
-    pub aoi_broadcasts_failed: u64,
+    pub reliable_buffer: Vec<u8>,
+    pub unreliable_buffer: Vec<u8>,
 }
 
 pub struct NetworkPlugin;
 
 impl Plugin for NetworkPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<PlayerRegistry>()
-            .init_resource::<NetworkFrameCounter>()
-            .init_resource::<NetworkDiagnostics>()
-            .add_systems(
-                Update,
-                (
-                    poll_network_events,
-                    // broadcast_positions,
-                    // broadcast_aoi,
-                    broadcast_network_updates,
-                    network_frame_diagnostic,
-                )
-                    .chain(),
-            );
+        app.init_resource::<PlayerRegistry>().add_systems(
+            Update,
+            (
+                poll_network_events,
+                process_food_collisions,
+                process_player_collisions,
+                broadcast_network_updates,
+            )
+                .chain(),
+        );
     }
 }
 
@@ -76,6 +69,7 @@ fn poll_network_events(
     mut net: ResMut<NetworkManager>,
     mut registry: ResMut<PlayerRegistry>,
     config: Res<ServerConfig>,
+    mut food_registry: ResMut<FoodRegistry>,
 ) {
     while let Ok(Some(event)) = net.peer.poll() {
         match event {
@@ -132,6 +126,32 @@ fn poll_network_events(
                         .peer
                         .send(&_connection, &stream, Bytes::from(ready_msg.to_bytes()));
 
+                    // Ask the parent shard to send some food
+                    if config.parent_shard_id != config.id {
+                        let parent_id = config.parent_shard_id;
+                        info!(
+                            "[NETWORK] Requesting food takeover from parent shard: {}",
+                            parent_id
+                        );
+                        let req = InterShardPayload::FoodTakeoverRequest {
+                            bounds_x: config.bounds.x,
+                            bounds_y: config.bounds.y,
+                            bounds_w: config.bounds.width,
+                            bounds_h: config.bounds.height,
+                        };
+                        let msg = BrokerMessage::InterShardMessage {
+                            topic_dest: string_to_topic(&format!("shard:{}", parent_id)),
+                            topic_from: string_to_topic(&config.zone),
+                            payload: req.to_bytes(),
+                        };
+                        if let Err(e) =
+                            net.peer
+                                .send(&_connection, &stream, Bytes::from(msg.to_bytes()))
+                        {
+                            error!("Failed to send reliable message asking for food: {:?}", e);
+                        }
+                    }
+
                     net.reliable_stream = Some(stream);
                 } else {
                     info!("[NETWORK] Unreliable stream to Broker is ready. Waking it up.");
@@ -161,12 +181,24 @@ fn poll_network_events(
                 net.broker_connection = None;
             }
             // Receiving messages FROM THE BROKER
-            GameNetworkEvent::Message { data, .. } => {
-                net.buffer.extend_from_slice(&data);
-
+            GameNetworkEvent::Message { stream, data, .. } => {
                 // First, unwrap the Broker protocol envelope and parse all messages
-                for broker_msg in BrokerMessage::parse_multiple(&mut net.buffer) {
-                    handle_broker_message(broker_msg, &mut registry, &mut net, &config);
+                let buffer = if stream.is_reliable() {
+                    &mut net.reliable_buffer
+                } else {
+                    &mut net.unreliable_buffer
+                };
+
+                buffer.extend_from_slice(&data);
+
+                for broker_msg in BrokerMessage::parse_multiple(buffer) {
+                    handle_broker_message(
+                        broker_msg,
+                        &mut registry,
+                        &mut net,
+                        &config,
+                        &mut food_registry,
+                    );
                 }
             }
             _ => {}
@@ -182,6 +214,7 @@ fn handle_broker_message(
     registry: &mut PlayerRegistry,
     net: &mut NetworkManager,
     config: &ServerConfig,
+    food_registry: &mut crate::food::FoodRegistry,
 ) {
     let my_topic = string_to_topic(&config.zone);
 
@@ -213,13 +246,50 @@ fn handle_broker_message(
                                 position: Vec2::new(SPAWN_X, SPAWN_Y),
                                 velocity: Vec2::new(0.0, 0.0),
                                 state: EntityState::Owned,
+                                score: 0.0,
                             },
                         );
+
+                        // Send current food data to the new player
+                        if net.broker_connection.is_some() && net.reliable_stream.is_some() {
+                            let all_food: Vec<shared::FoodData> =
+                                food_registry.food.values().cloned().collect();
+                            if !all_food.is_empty() {
+                                if let Ok(payload) =
+                                    bincode::serialize(&ServerMessage::FoodSync(all_food))
+                                {
+                                    let food_msg =
+                                        BrokerMessage::DirectMessageReliable { client_id, payload }
+                                            .to_bytes();
+
+                                    if let (Some(conn), Some(stream)) =
+                                        (&net.broker_connection, &net.reliable_stream)
+                                    {
+                                        if let Err(e) =
+                                            net.peer.send(&conn, &stream, Bytes::from(food_msg))
+                                        {
+                                            error!(
+                                                "Failed to send reliable message asking for food: {:?}",
+                                                e
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            warn!(
+                                "Cannot send food data to new player {}: no connection to broker or reliable stream",
+                                client_id
+                            );
+                        }
                     }
                     ClientMessage::MoveInput { x, y } => {
                         if let Some(player) = registry.players.get_mut(&client_id) {
-                            let speed = 5.0;
-                            player.velocity = Vec2::new(x * speed, y * speed);
+                            let base_speed = BASE_PLAYER_SPEED;
+                            let current_speed =
+                                (base_speed / (1.0 + (player.score * 0.005))).max(1.0);
+
+                            player.velocity = Vec2::new(x * current_speed, y * current_speed);
 
                             player.position.x = (player.position.x + player.velocity.x)
                                 .clamp(MAP_BOUND_MIN, MAP_BOUND_MAX);
@@ -302,6 +372,7 @@ fn handle_broker_message(
                         vel_x: player.velocity.x,
                         vel_y: player.velocity.y,
                         state: state_buf,
+                        score: player.score,
                     };
                     send_inter_shard(net, my_topic, neighbor_topic, req);
                 }
@@ -380,6 +451,7 @@ fn handle_broker_message(
                             vel_x,
                             vel_y,
                             state,
+                            score,
                         } => {
                             // Spawn a ghost
                             let clean_username = String::from_utf8_lossy(&state)
@@ -392,9 +464,38 @@ fn handle_broker_message(
                                     position: Vec2::new(pos_x, pos_y),
                                     velocity: Vec2::new(vel_x, vel_y),
                                     state: EntityState::Ghost,
+                                    score: score,
                                 },
                             );
                             info!("GHOST CREATED for the player {}", entity_id);
+
+                            // Send reliable message to the new ghost with all the current food data in order to spawn them correctly
+                            let all_food: Vec<shared::FoodData> =
+                                food_registry.food.values().cloned().collect();
+                            if !all_food.is_empty() {
+                                if let Ok(payload) =
+                                    bincode::serialize(&ServerMessage::FoodSync(all_food))
+                                {
+                                    let food_msg = BrokerMessage::DirectMessageReliable {
+                                        client_id: entity_id,
+                                        payload,
+                                    }
+                                    .to_bytes();
+
+                                    if let (Some(conn), Some(stream)) =
+                                        (&net.broker_connection, &net.reliable_stream)
+                                    {
+                                        if let Err(e) =
+                                            net.peer.send(&conn, &stream, Bytes::from(food_msg))
+                                        {
+                                            error!(
+                                                "Failed to send reliable message sending foodData: {:?}",
+                                                e
+                                            );
+                                        }
+                                    }
+                                }
+                            }
                         }
                         InterShardPayload::GhostUpdate {
                             entity_id,
@@ -402,12 +503,14 @@ fn handle_broker_message(
                             pos_y,
                             vel_x,
                             vel_y,
+                            score,
                         } => {
                             // Apply correction to the ghost's position/velocity
                             if let Some(player) = registry.players.get_mut(&entity_id) {
                                 if player.state == EntityState::Ghost {
                                     player.position = Vec2::new(pos_x, pos_y);
                                     player.velocity = Vec2::new(vel_x, vel_y);
+                                    player.score = score;
                                 }
                             }
                         }
@@ -421,6 +524,66 @@ fn handle_broker_message(
                                 player.state = EntityState::PendingHandoff {
                                     neighbor_topics: vec![topic_from],
                                 };
+                            }
+                        }
+                        InterShardPayload::FoodTakeoverRequest {
+                            bounds_x,
+                            bounds_y,
+                            bounds_w,
+                            bounds_h,
+                        } => {
+                            let rect = shared::rect::Rect {
+                                x: bounds_x,
+                                y: bounds_y,
+                                width: bounds_w,
+                                height: bounds_h,
+                            };
+                            let mut transfer_list = Vec::new();
+                            let mut ids_to_remove = Vec::new();
+
+                            for (&id, food) in food_registry.food.iter() {
+                                let pos = shared::rect::Vec2 {
+                                    x: food.x,
+                                    y: food.y,
+                                };
+                                if rect.contains(&pos) {
+                                    transfer_list.push(food.clone());
+                                    ids_to_remove.push(id);
+                                }
+                            }
+
+                            // Parent removes food from its registry without notifying clients
+                            for id in &ids_to_remove {
+                                food_registry.food.remove(id);
+                                food_registry.ordered_ids.retain(|i| i != id);
+                            }
+
+                            info!(
+                                "Transferring {} food items to new child shard",
+                                transfer_list.len()
+                            );
+
+                            // Send payload to the new shard
+                            if let Ok(bincode_payload) = bincode::serialize(&transfer_list) {
+                                let resp = InterShardPayload::FoodTakeoverResponse {
+                                    payload: bincode_payload,
+                                };
+                                send_inter_shard(net, my_topic, topic_from, resp);
+                            }
+                        }
+
+                        InterShardPayload::FoodTakeoverResponse { payload } => {
+                            if let Ok(food_list) =
+                                bincode::deserialize::<Vec<shared::FoodData>>(&payload)
+                            {
+                                for food in food_list {
+                                    food_registry.food.insert(food.id, food.clone());
+                                    food_registry.ordered_ids.push(food.id);
+                                }
+                                info!(
+                                    "Successfully inherited {} food items from parent!",
+                                    food_registry.food.len()
+                                );
                             }
                         }
                     }
@@ -459,16 +622,24 @@ fn send_inter_shard(
 
 fn broadcast_network_updates(
     net: ResMut<NetworkManager>,
-    registry: Res<PlayerRegistry>,
+    player_registry: Res<PlayerRegistry>,
     config: Res<ServerConfig>,
-    mut diagnostics: ResMut<NetworkDiagnostics>,
+    mut spawn_events: MessageReader<FoodSpawnedMessage>,
+    mut eaten_events: MessageReader<FoodEatenMessage>,
+    mut local_frame_count: Local<u64>,
 ) {
+    *local_frame_count += 1;
+
     let Some(broker_conn) = &net.broker_connection else {
         debug!("[NETWORK] Cannot send positions: broker_connection is None");
         return;
     };
     let Some(unrel_stream) = &net.unreliable_stream else {
         debug!("[NETWORK] Cannot send positions: unreliable_stream is None");
+        return;
+    };
+    let Some(rel_stream) = &net.reliable_stream else {
+        debug!("[NETWORK] Cannot send positions: reliable_stream is None");
         return;
     };
     let my_topic = string_to_topic(&config.zone);
@@ -488,47 +659,51 @@ fn broadcast_network_updates(
         }
     };
 
-    // ============ Send Position Updates for the Spatial Server (20Hz) ===========
-    for (client_id, player_data) in &registry.players {
+    // ============ Send client Position Updates for the Spatial Server (20Hz) And Ghost Updates to other shards ===========
+    for (client_id, player_data) in &player_registry.players {
+        if player_data.state == EntityState::Ghost {
+            continue;
+        }
+
         all_players.push(PlayerState {
             id: *client_id,
             username: player_data.username.clone(),
             x: player_data.position.x,
             y: player_data.position.y,
+            score: player_data.score,
         });
-
-        if player_data.state == EntityState::Ghost {
-            continue;
-        }
 
         let pos_update = BrokerMessage::PositionUpdate {
             client_id: *client_id,
             x: player_data.position.x,
             y: player_data.position.y,
+            score: player_data.score,
         };
 
-        // Petite sécurité MTU au passage : on check AVANT d'ajouter au buffer !
+        // MTU consideration : if adding this position update would exceed the MTU limit, flush the buffer first
         let pos_bytes = pos_update.to_bytes();
         if batched_payload.len() + pos_bytes.len() > 1000 {
             flush_buffer(&mut batched_payload);
         }
         batched_payload.extend_from_slice(&pos_bytes);
-        diagnostics.position_updates_attempted += 1;
 
         // --- Handoff Logics : Send GhostUpdates (20Hz) ---
         if let EntityState::PendingHandoff { neighbor_topics } = &player_data.state {
+            let payload = InterShardPayload::GhostUpdate {
+                entity_id: *client_id,
+                pos_x: player_data.position.x,
+                pos_y: player_data.position.y,
+                vel_x: player_data.velocity.x,
+                vel_y: player_data.velocity.y,
+                score: player_data.score,
+            }
+            .to_bytes();
+
             for neighbor_topic in neighbor_topics {
                 let msg = BrokerMessage::InterShardMessage {
                     topic_dest: *neighbor_topic,
                     topic_from: my_topic,
-                    payload: InterShardPayload::GhostUpdate {
-                        entity_id: *client_id,
-                        pos_x: player_data.position.x,
-                        pos_y: player_data.position.y,
-                        vel_x: player_data.velocity.x,
-                        vel_y: player_data.velocity.y,
-                    }
-                    .to_bytes(),
+                    payload: payload.clone(),
                 };
 
                 let ghost_bytes = msg.to_bytes();
@@ -543,206 +718,185 @@ fn broadcast_network_updates(
     // Global AOI Snapshot for Clients (20Hz)
     if !all_players.is_empty() {
         // Make chunks of 15 players to avoid MTU issues with the AOI snapshot
-        // (can be optimized by sending a single snapshot with multiple players instead of multiple snapshots)
+        // Currently a player data is around 40 bytes, so 15 players is around 600 bytes, leaving room for the BrokerMessage envelope and some margin
+        // If the player data size increases, we can reduce the chunk size to avoid MTU issues, or implement a more sophisticated batching mechanism
         for chunk in all_players.chunks(15) {
             let snapshot = ServerMessage::AOISnapshot {
                 players: chunk.to_vec(),
             };
 
+            //debug!( "[NETWORK] Broadcasting AOI Snapshot with {} players", chunk.len());
+
             if let Ok(aoi_bytes) = bincode::serialize(&snapshot) {
-                let publish_msg = BrokerMessage::Publish {
+                let msg_bytes = BrokerMessage::Publish {
                     topic: my_topic,
                     payload: aoi_bytes,
-                };
-
-                let msg_bytes = publish_msg.to_bytes();
+                }
+                .to_bytes();
 
                 // Flush the buffer if adding this AOI snapshot would exceed the MTU limit
                 if batched_payload.len() + msg_bytes.len() > 1000 {
                     flush_buffer(&mut batched_payload);
                 }
-
                 batched_payload.extend_from_slice(&msg_bytes);
-                diagnostics.aoi_broadcasts_sent += 1;
             }
         }
     }
 
-    // Final flush for any remaining messages in the buffer
+    // ============ Send Food Updates to clients (reliable event driven) ===========
+    let eaten: Vec<u32> = eaten_events.read().map(|e| e.0).collect();
+    if !eaten.is_empty() {
+        let payload = bincode::serialize(&ServerMessage::FoodEaten(eaten)).unwrap();
+        let bytes = BrokerMessage::PublishReliable {
+            topic: my_topic,
+            payload,
+        }
+        .to_bytes();
+        let _ = net.peer.send(broker_conn, rel_stream, Bytes::from(bytes));
+    }
+
+    let spawned: Vec<shared::FoodData> = spawn_events.read().map(|e| e.0.clone()).collect();
+    if !spawned.is_empty() {
+        let payload = bincode::serialize(&ServerMessage::FoodSync(spawned)).unwrap();
+        let bytes = BrokerMessage::PublishReliable {
+            topic: my_topic,
+            payload,
+        }
+        .to_bytes();
+        let _ = net.peer.send(broker_conn, rel_stream, Bytes::from(bytes));
+    }
+
+    // Final flush after processing all updates
     flush_buffer(&mut batched_payload);
 }
 
 // -------------------------------------------------------------------------
-// Frame Rate Diagnostic - logs every 100 frames to verify 20Hz operation
-// -------------------------------------------------------------------------
-fn network_frame_diagnostic(mut frame_counter: ResMut<NetworkFrameCounter>) {
-    frame_counter.frame_count += 1;
-    // Commented out to reduce console pollution - uncomment for debugging frame rates
-    // if frame_counter.frame_count % 20 == 0 {
-    //     debug!(
-    //         "[NETWORK] {} frames processed (20Hz = 1 frame every 50ms)",
-    //         frame_counter.frame_count
-    //     );
-    // }
+// Process collisions between players and food. Update scores and remove eaten food
+// --------------------------------------------------------------------------
+pub fn process_food_collisions(
+    mut registry: ResMut<PlayerRegistry>,
+    mut food_registry: ResMut<FoodRegistry>,
+    mut eaten_writer: MessageWriter<FoodEatenMessage>,
+) {
+    let mut eaten_food = HashSet::new();
+    let mut score_gains = HashMap::new();
+
+    // Detects collisions with food
+    for (client_id, player) in registry.players.iter() {
+        // Ghosts cannot eat food in the shard
+        if player.state == EntityState::Ghost {
+            continue;
+        }
+
+        let player_radius = BASE_PLAYER_RADIUS + player.score;
+        let player_pos = player.position;
+
+        for (&food_id, food) in food_registry.food.iter() {
+            if eaten_food.contains(&food_id) {
+                continue;
+            }
+
+            let food_pos = Vec2::new(food.x, food.y);
+            if player_pos.distance(food_pos) < player_radius {
+                eaten_food.insert(food_id);
+                *score_gains.entry(*client_id).or_insert(0.0) += SCORE_GAIN_PER_FOOD;
+            }
+        }
+    }
+
+    // Apply Score Gains
+    for (id, gain) in score_gains {
+        if let Some(p) = registry.players.get_mut(&id) {
+            p.score += gain;
+        }
+    }
+
+    // Destroy eaten food and notify clients
+    for food_id in eaten_food {
+        if food_registry.food.remove(&food_id).is_some() {
+            food_registry.ordered_ids.retain(|&id| id != food_id);
+            eaten_writer.write(FoodEatenMessage(food_id));
+        }
+    }
 }
 
-// // ===================================================================================================================
-// // The following functions should probably be removed if broadcast_network_updates works properly, they are left here for reference and debugging purposes.
-// // ===================================================================================================================
+// -----------------------------------------------------------------------------------
+// Process collisions between players. Update scores and remove eaten players (death)
+// -----------------------------------------------------------------------------------
+pub fn process_player_collisions(
+    mut registry: ResMut<PlayerRegistry>,
+    net: ResMut<NetworkManager>,
+) {
+    let mut players_to_kill = HashSet::new();
+    let mut score_gains = HashMap::new();
 
-// // -------------------------------------------------------------------------
-// // Position Updates (20Hz) - For Spatial Server
-// // -------------------------------------------------------------------------
-// fn broadcast_positions(
-//     net: ResMut<NetworkManager>,
-//     registry: Res<PlayerRegistry>,
-//     config: Res<ServerConfig>,
-//     mut diagnostics: ResMut<NetworkDiagnostics>,
-// ) {
-//     let Some(broker_conn) = &net.broker_connection else {
-//         debug!("[NETWORK] Cannot send positions: broker_connection is None");
-//         return;
-//     };
-//     let Some(unrel_stream) = &net.unreliable_stream else {
-//         debug!("[NETWORK] Cannot send positions: unreliable_stream is None");
-//         return;
-//     };
+    let player_ids: Vec<u32> = registry.players.keys().copied().collect();
 
-//     let my_topic = string_to_topic(&config.zone);
-//     let mut positions_sent = 0usize;
-//     let mut positions_failed = 0usize;
+    // Detects collisions between players
+    for i in 0..player_ids.len() {
+        for j in (i + 1)..player_ids.len() {
+            let id_a = player_ids[i];
+            let id_b = player_ids[j];
 
-//     // ============ Send Position Updates for the Spatial Server (20Hz) ===========
-//     for (client_id, player_data) in &registry.players {
-//         if player_data.state == EntityState::Ghost {
-//             // Don't send PositionUpdates for ghosts
-//             continue;
-//         }
+            let p_a = registry.players.get(&id_a).unwrap();
+            let p_b = registry.players.get(&id_b).unwrap();
 
-//         // Notify the Spatial Server of the exact coordinates
-//         let pos_update = BrokerMessage::PositionUpdate {
-//             client_id: *client_id,
-//             x: player_data.position.x,
-//             y: player_data.position.y,
-//         };
+            let radius_a = BASE_PLAYER_RADIUS + p_a.score;
+            let radius_b = BASE_PLAYER_RADIUS + p_b.score;
+            let dist = p_a.position.distance(p_b.position);
 
-//         diagnostics.position_updates_attempted += 1;
-//         if let Err(e) = net.peer.send(
-//             broker_conn,
-//             unrel_stream,
-//             Bytes::from(pos_update.to_bytes()),
-//         ) {
-//             error!(
-//                 "[NETWORK] Failed to send PositionUpdate for client {}: {:?}",
-//                 client_id, e
-//             );
-//             diagnostics.position_updates_failed += 1;
-//             positions_failed += 1;
-//         } else {
-//             positions_sent += 1;
-//         }
+            if dist < radius_a || dist < radius_b {
+                // A eats B
+                if radius_a >= radius_b * 1.10 && dist < radius_a {
+                    if !players_to_kill.contains(&id_b) {
+                        players_to_kill.insert(id_b);
+                        if p_a.state != EntityState::Ghost {
+                            *score_gains.entry(id_a).or_insert(0.0) += p_b.score * 0.5;
+                        }
+                    }
+                }
+                // B eats A
+                else if radius_b >= radius_a * 1.10 && dist < radius_b {
+                    if !players_to_kill.contains(&id_a) {
+                        players_to_kill.insert(id_a);
+                        if p_b.state != EntityState::Ghost {
+                            *score_gains.entry(id_b).or_insert(0.0) += p_a.score * 0.5;
+                        }
+                    }
+                }
+            }
+        }
+    }
 
-//         // --- Handoff Logics : Send GhostUpdates (20Hz) ---
-//         if let EntityState::PendingHandoff { neighbor_topics } = &player_data.state {
-//             let ghost_update_payload = InterShardPayload::GhostUpdate {
-//                 entity_id: *client_id,
-//                 pos_x: player_data.position.x,
-//                 pos_y: player_data.position.y,
-//                 vel_x: player_data.velocity.x,
-//                 vel_y: player_data.velocity.y,
-//             }
-//             .to_bytes();
+    // Apply Score Gains
+    for (id, gain) in score_gains {
+        if let Some(p) = registry.players.get_mut(&id) {
+            p.score += gain;
+        }
+    }
 
-//             for neighbor_topic in neighbor_topics {
-//                 let msg = BrokerMessage::InterShardMessage {
-//                     topic_dest: *neighbor_topic,
-//                     topic_from: my_topic,
-//                     payload: ghost_update_payload.clone(),
-//                 };
-//                 if let Err(e) =
-//                     net.peer
-//                         .send(broker_conn, unrel_stream, Bytes::from(msg.to_bytes()))
-//                 {
-//                     warn!("[NETWORK] Failed to send GhostUpdate to neighbor: {:?}", e);
-//                 }
-//             }
-//         }
-//     }
+    // Player deaths - remove them from the registry and notify clients
+    for id in players_to_kill {
+        if let Some(dead_player) = registry.players.remove(&id) {
+            if dead_player.state != EntityState::Ghost {
+                info!("Player {} has been eaten!", dead_player.username);
 
-//     if positions_sent > 0 || positions_failed > 0 {
-//         debug!(
-//             "[NETWORK-20Hz] PositionUpdates: {} sent, {} failed",
-//             positions_sent, positions_failed
-//         );
-//     }
-// }
-
-// // -------------------------------------------------------------------------
-// // AOI Broadcast (20Hz) - For Clients
-// // -------------------------------------------------------------------------
-// fn broadcast_aoi(
-//     net: ResMut<NetworkManager>,
-//     registry: Res<PlayerRegistry>,
-//     config: Res<ServerConfig>,
-//     mut diagnostics: ResMut<NetworkDiagnostics>,
-// ) {
-//     let Some(broker_conn) = &net.broker_connection else {
-//         debug!("[NETWORK] Cannot broadcast AOI: broker_connection is None");
-//         return;
-//     };
-//     let Some(unrel_stream) = &net.unreliable_stream else {
-//         debug!("[NETWORK] Cannot broadcast AOI: unreliable_stream is None");
-//         return;
-//     };
-
-//     let mut all_players = Vec::new();
-
-//     // ============ Collect all non-ghost players for AOI snapshot ===========
-//     for (client_id, player_data) in &registry.players {
-//         if player_data.state == EntityState::Ghost {
-//             continue;
-//         }
-
-//         all_players.push(PlayerState {
-//             id: *client_id,
-//             username: player_data.username.clone(),
-//             x: player_data.position.x,
-//             y: player_data.position.y,
-//         });
-//     }
-
-//     if all_players.is_empty() {
-//         return;
-//     }
-
-//     // ============ Publish the Global AOI of this Shard (20Hz) ===========
-//     let player_count = all_players.len();
-//     let snapshot = ServerMessage::AOISnapshot {
-//         players: all_players,
-//     };
-
-//     match bincode::serialize(&snapshot) {
-//         Ok(payload) => {
-//             let publish_msg = BrokerMessage::Publish {
-//                 topic: string_to_topic(&config.zone),
-//                 payload,
-//             };
-
-//             diagnostics.aoi_broadcasts_sent += 1;
-//             if let Err(e) = net.peer.send(
-//                 broker_conn,
-//                 unrel_stream,
-//                 Bytes::from(publish_msg.to_bytes()),
-//             ) {
-//                 warn!("[NETWORK] Failed to publish AOI to Broker: {:?}", e);
-//                 diagnostics.aoi_broadcasts_failed += 1;
-//             } else {
-//                 debug!(
-//                     "[NETWORK-20Hz] AOI snapshot published: {} players",
-//                     player_count
-//                 );
-//             }
-//         }
-//         Err(e) => error!("Failed to serialize AOI Snapshot: {:?}", e),
-//     }
-// }
+                if let (Some(conn), Some(stream)) = (&net.broker_connection, &net.reliable_stream) {
+                    if let Ok(payload) = bincode::serialize(&shared::ServerMessage::GameOver) {
+                        let msg = shared::broker_protocol::BrokerMessage::DirectMessageReliable {
+                            client_id: id,
+                            payload,
+                        }
+                        .to_bytes();
+                        let _ = net.peer.send(conn, stream, Bytes::from(msg));
+                    }
+                }
+            } else {
+                info!(
+                    "Ghost of {} has been eaten! The master server will handle it.",
+                    dead_player.username
+                );
+            }
+        }
+    }
+}

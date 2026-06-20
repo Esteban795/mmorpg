@@ -1,5 +1,6 @@
 pub mod broker_protocol;
 pub mod orchestrator_protocol;
+pub mod rect;
 
 use redis::{Client, RedisError, aio::MultiplexedConnection};
 use serde::{Deserialize, Serialize};
@@ -20,6 +21,8 @@ pub const MAP_BOUND_MAX: f32 = 2000.0;
 pub const MAP_SIZE: f32 = 4000.0;
 pub const SPAWN_X: f32 = 32.0;
 pub const SPAWN_Y: f32 = 40.0;
+
+pub const BASE_PLAYER_RADIUS: f32 = 15.0; // Base radius for a player with score 0, can be adjusted as needed. SAME in SERVER, need to be consistent
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ClientMessage {
@@ -49,6 +52,9 @@ impl fmt::Display for ClientMessage {
 pub enum ServerMessage {
     Welcome { player_id: u32 },
     AOISnapshot { players: Vec<PlayerState> },
+    FoodSync(Vec<FoodData>), // New food data or resync
+    FoodEaten(Vec<u32>),
+    GameOver,
 }
 
 impl fmt::Display for ServerMessage {
@@ -60,6 +66,13 @@ impl fmt::Display for ServerMessage {
             ServerMessage::AOISnapshot { players } => {
                 write!(f, "AOISnapshot {{ players: {:?} }}", players)
             }
+            ServerMessage::FoodSync(food) => {
+                write!(f, "FoodSync {{ food: {:?} }}", food)
+            }
+            ServerMessage::FoodEaten(food_ids) => {
+                write!(f, "FoodEaten {{ food_ids: {:?} }}", food_ids)
+            }
+            ServerMessage::GameOver => write!(f, "GameOver"),
         }
     }
 }
@@ -138,4 +151,13 @@ pub struct PlayerState {
     pub username: String,
     pub x: f32,
     pub y: f32,
+    pub score: f32,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct FoodData {
+    pub id: u32,
+    pub x: f32,
+    pub y: f32,
+    pub color_index: u8,
 }

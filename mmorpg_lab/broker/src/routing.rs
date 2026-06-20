@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 
 use crate::network::BrokerNetwork;
+use crate::state::BrokerState;
 use crate::state::Topic;
-use crate::state::{BrokerDiagnostics, BrokerState};
 use bevy::prelude::*;
 use bytes::Bytes;
 use game_sockets::{GameNetworkEvent, GameStream};
@@ -13,11 +13,7 @@ use shared::broker_protocol::{
 use shared::{ClientMessage, ServerMessage};
 use tracing::{info, warn};
 
-pub fn process_network_events(
-    mut network: ResMut<BrokerNetwork>,
-    mut state: ResMut<BrokerState>,
-    mut diagnostics: ResMut<BrokerDiagnostics>,
-) {
+pub fn process_network_events(mut network: ResMut<BrokerNetwork>, mut state: ResMut<BrokerState>) {
     // Poll all available events from the background network thread
     while let Ok(Some(event)) = network.peer.poll() {
         match event {
@@ -64,7 +60,14 @@ pub fn process_network_events(
                 state
                     .connection_unreliable_streams
                     .remove(&conn.connection_id);
-                state.connection_buffers.remove(&conn.connection_id);
+
+                // Remove any buffers associated with this connection to free memory
+                state
+                    .connection_reliable_buffers
+                    .remove(&conn.connection_id);
+                state
+                    .connection_unreliable_buffers
+                    .remove(&conn.connection_id);
 
                 if let Some(id) = state.uuid_to_id.remove(&conn.connection_id) {
                     state.id_to_uuid.remove(&id);
@@ -131,10 +134,17 @@ pub fn process_network_events(
                 stream,
                 data,
             } => {
-                let buffer = state
-                    .connection_buffers
-                    .entry(connection.connection_id)
-                    .or_default();
+                let buffer = if stream.is_reliable() {
+                    state
+                        .connection_reliable_buffers
+                        .entry(connection.connection_id)
+                        .or_default()
+                } else {
+                    state
+                        .connection_unreliable_buffers
+                        .entry(connection.connection_id)
+                        .or_default()
+                };
 
                 buffer.extend_from_slice(&data);
                 let messages = BrokerMessage::parse_multiple(buffer);
@@ -149,7 +159,6 @@ pub fn process_network_events(
 
                 // Creates a new buffer to send to the spatial server the same way it received the data
                 let mut spatial_batch = Vec::new();
-                let mut pos_updates_count = 0;
 
                 for msg in messages {
                     match msg {
@@ -229,8 +238,6 @@ pub fn process_network_events(
 
                         // Shards publish AOI updates to the Broker with the "Publish" message, and the Broker forwards them to all subscribed clients.
                         BrokerMessage::Publish { topic, payload } => {
-                            diagnostics.aoi_publishes_received += 1;
-
                             // Register Shard
                             state.topic_to_shard.insert(topic, connection.connection_id);
 
@@ -255,7 +262,6 @@ pub fn process_network_events(
                                                 client_stream,
                                                 Bytes::from(out_msg),
                                             );
-                                            diagnostics.aoi_broadcasts_sent += 1;
                                         } else {
                                             warn!(
                                                 "[BROKER] No unreliable stream yet for client {} (UUID {:?}). AOI dropped.",
@@ -266,6 +272,52 @@ pub fn process_network_events(
                                 }
                                 // Commented to reduce log noise - AOI publishing is verified by [NETWORK-20Hz] logs
                                 // debug!("[BROKER] Published AOI to {} subscriber(s).", count);
+                            }
+                        }
+
+                        // Receive PublishReliable message from shard and forward it to subscribers like a normal Publish,
+                        // but using the reliable stream instead of the unreliable one.
+                        // Used for critical updates that must not be dropped, like shard-to-shard handoff coordination messages.
+                        BrokerMessage::PublishReliable { topic, payload } => {
+                            if let Some(subscribers) = state.topic_subscribers.get(&topic) {
+                                let out_msg = BrokerMessage::Broadcast {
+                                    payload: payload.clone(),
+                                }
+                                .to_bytes();
+                                let bytes = Bytes::from(out_msg);
+
+                                for client_id in subscribers.iter().copied() {
+                                    if let Some(&client_uuid) = state.id_to_uuid.get(&client_id) {
+                                        if let Some(client_stream) =
+                                            state.connection_reliable_streams.get(&client_uuid)
+                                        {
+                                            let _ = network.peer.send(
+                                                &client_uuid.into(),
+                                                client_stream,
+                                                bytes.clone(),
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // DirectMessageReliable is used for direct shard-to-client messages that must not be dropped, like critical state updates during handoff.
+                        // The Broker forwards the message directly to the specified client without going through the topic subscription system.
+                        // Used to send specific messages to a specific client whithout overloading other clients
+                        // (eg: when a client joins, the shard sends all the food Data to the player then reliable broadcast events updates them)
+                        BrokerMessage::DirectMessageReliable { client_id, payload } => {
+                            if let Some(&client_uuid) = state.id_to_uuid.get(&client_id) {
+                                if let Some(client_stream) =
+                                    state.connection_reliable_streams.get(&client_uuid)
+                                {
+                                    let out_msg = BrokerMessage::Broadcast { payload }.to_bytes();
+                                    let _ = network.peer.send(
+                                        &client_uuid.into(),
+                                        client_stream,
+                                        Bytes::from(out_msg),
+                                    );
+                                }
                             }
                         }
 
@@ -424,64 +476,20 @@ pub fn process_network_events(
                         }
 
                         //Position updates from shards to the spatial server.
-                        BrokerMessage::PositionUpdate { client_id, x, y } => {
-                            diagnostics.position_updates_received += 1;
-
-                            let forward_msg =
-                                BrokerMessage::PositionUpdate { client_id, x, y }.to_bytes();
+                        BrokerMessage::PositionUpdate {
+                            client_id,
+                            x,
+                            y,
+                            score,
+                        } => {
+                            let forward_msg = BrokerMessage::PositionUpdate {
+                                client_id,
+                                x,
+                                y,
+                                score,
+                            }
+                            .to_bytes();
                             spatial_batch.extend_from_slice(&forward_msg);
-                            pos_updates_count += 1;
-
-                            /* This part is moved after the loop to batch multiple position updates together in a single send to the spatial server
-                            if let Some(spatial_uuid) = state.spatial_server_uuid {
-                                if let Some(spatial_stream) =
-                                    state.connection_unreliable_streams.get(&spatial_uuid)
-                                {
-                                    let forward_msg =
-                                        BrokerMessage::PositionUpdate { client_id, x, y }
-                                            .to_bytes();
-                                    match network.peer.send(
-                                        &spatial_uuid.into(),
-                                        spatial_stream,
-                                        Bytes::from(forward_msg),
-                                    ) {
-                                        Ok(_) => {
-                                            diagnostics.position_updates_forwarded += 1;
-                                            debug!(
-                                                "[BROKER] Forwarded position update for client {} to spatial server.",
-                                                client_id
-                                            );
-                                        }
-                                        Err(e) => {
-                                            diagnostics.position_updates_failed += 1;
-                                            warn!(
-                                                "[BROKER] Failed to forward position update for client {} to spatial server: {:?}",
-                                                client_id, e
-                                            );
-                                        }
-                                    }
-                                } else {
-                                    warn!(
-                                        "[BROKER] No spatial server stream registered yet for position update. Dropped (spatial server not connected yet?)."
-                                    );
-                                    diagnostics.position_updates_failed += 1;
-                                }
-                            } else {
-                                warn!(
-                                    "[BROKER] No spatial server UUID registered yet for position update. Dropped (spatial server not connected yet?)."
-                                );
-                                diagnostics.position_updates_failed += 1;
-                            }
-
-                            if diagnostics.position_updates_received % 10 == 0 {
-                                debug!(
-                                    "[BROKER-DIAG] PositionUpdates: {} received, {} forwarded, {} failed",
-                                    diagnostics.position_updates_received,
-                                    diagnostics.position_updates_forwarded,
-                                    diagnostics.position_updates_failed
-                                );
-                            }
-                            */
                         }
 
                         BrokerMessage::CrossingAlert {
@@ -805,10 +813,9 @@ pub fn process_network_events(
                                 Bytes::from(spatial_batch),
                             ) {
                                 Ok(_) => {
-                                    diagnostics.position_updates_forwarded += pos_updates_count;
+                                    //debug!("[BROKER] Forwarded batch of {} position updates to spatial server.", pos_updates_count );
                                 }
                                 Err(e) => {
-                                    diagnostics.position_updates_failed += pos_updates_count;
                                     warn!(
                                         "[BROKER] Failed to forward batched position updates: {:?}",
                                         e

@@ -1,10 +1,7 @@
 mod listener;
 mod quic_listener;
 mod spawner;
-use shared::{
-    DEFAULT_ORCHESTRATOR_ADDR, DEFAULT_ORCHESTRATOR_QUIC_PORT,
-    DEFAULT_REDIS_IP,
-};
+use shared::{DEFAULT_ORCHESTRATOR_ADDR, DEFAULT_ORCHESTRATOR_QUIC_PORT, DEFAULT_REDIS_IP};
 
 use tracing::{Level, error, info};
 use tracing_subscriber::FmtSubscriber;
@@ -36,7 +33,8 @@ async fn main() {
         listener::heartbeat_listener(listener_redis).await;
     });
 
-    let (spawn_tx, spawn_rx) = tokio::sync::mpsc::unbounded_channel::<u32>();
+    let (spawn_tx, spawn_rx) =
+        tokio::sync::mpsc::unbounded_channel::<(u32, u32, shared::rect::Rect)>();
 
     let orchestrator_addr: String = std::env::var("ORCHESTRATOR_ADDR")
         .unwrap_or_else(|_| DEFAULT_ORCHESTRATOR_ADDR.to_string())

@@ -3,6 +3,7 @@ use game_sockets::{
     protocols::QuicBackend,
 };
 use shared::orchestrator_protocol::OrchestratorMessage;
+use shared::rect::Rect;
 use tokio::sync::mpsc;
 use tracing::{error, info, warn};
 
@@ -10,11 +11,15 @@ pub struct QuicOrchestrator {
     pub peer: GamePeer,
     pub connection: Option<GameConnection>,
     pub reliable_stream: Option<GameStream>,
-    spawn_tx: mpsc::UnboundedSender<u32>,
+    spawn_tx: mpsc::UnboundedSender<(u32, u32, Rect)>,
 }
 
 impl QuicOrchestrator {
-    pub fn new(addr: &String, port: u16, spawn_tx: mpsc::UnboundedSender<u32>) -> Self {
+    pub fn new(
+        addr: &String,
+        port: u16,
+        spawn_tx: mpsc::UnboundedSender<(u32, u32, Rect)>,
+    ) -> Self {
         let backend = QuicBackend::new();
         let peer = GamePeer::new(backend);
 
@@ -98,11 +103,43 @@ impl QuicOrchestrator {
         if let Some(message) = OrchestratorMessage::from_bytes(data) {
             match message {
                 OrchestratorMessage::RequestSplit {
-                    shard_id: _,
+                    shard_id,
                     new_shards_ids,
+                    parent_bounds,
                 } => {
-                    for new_id in new_shards_ids {
-                        if let Err(e) = self.spawn_tx.send(new_id) {
+                    let sub_w = parent_bounds.width / 2.0;
+                    let sub_h = parent_bounds.height / 2.0;
+
+                    let bounds = [
+                        Rect {
+                            x: parent_bounds.x,
+                            y: parent_bounds.y,
+                            width: sub_w,
+                            height: sub_h,
+                        }, // NW
+                        Rect {
+                            x: parent_bounds.x + sub_w,
+                            y: parent_bounds.y,
+                            width: sub_w,
+                            height: sub_h,
+                        }, // NE
+                        Rect {
+                            x: parent_bounds.x,
+                            y: parent_bounds.y + sub_h,
+                            width: sub_w,
+                            height: sub_h,
+                        }, // SW
+                        Rect {
+                            x: parent_bounds.x + sub_w,
+                            y: parent_bounds.y + sub_h,
+                            width: sub_w,
+                            height: sub_h,
+                        }, // SE
+                    ];
+
+                    for i in 0..4 {
+                        if let Err(e) = self.spawn_tx.send((new_shards_ids[i], shard_id, bounds[i]))
+                        {
                             error!("Could not send spawn request: {:?}", e);
                         }
                     }

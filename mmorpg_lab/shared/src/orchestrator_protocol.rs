@@ -1,3 +1,4 @@
+use crate::rect::Rect;
 use bytes::{Buf, BufMut, BytesMut};
 
 // --- MESSAGES TAGS ---
@@ -7,21 +8,36 @@ pub const TAG_SPLIT_DONE: u8 = 0x03;
 
 #[derive(Debug, Clone)]
 pub enum OrchestratorMessage {
-    RequestSplit { shard_id: u32 , new_shards_ids : [u32 ; 4]},
-    SplitConfirmation { shard_id: u32, new_shard_id: u32 },
-    SplitDone { shard_id: u32, new_shard_id: u32 },
+    RequestSplit {
+        shard_id: u32,
+        new_shards_ids: [u32; 4],
+        parent_bounds: Rect,
+    },
+    SplitConfirmation {
+        shard_id: u32,
+        new_shard_id: u32,
+    },
+    SplitDone {
+        shard_id: u32,
+        new_shard_id: u32,
+    },
 }
 
 impl OrchestratorMessage {
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut buf = BytesMut::new();
         match self {
-            OrchestratorMessage::RequestSplit { shard_id, new_shards_ids } => {
+            OrchestratorMessage::RequestSplit {
+                shard_id,
+                new_shards_ids,
+                parent_bounds,
+            } => {
                 buf.put_u8(TAG_REQUEST_SPLIT);
                 buf.put_u32_le(*shard_id);
                 for &id in new_shards_ids {
                     buf.put_u32_le(id);
                 }
+                buf.extend_from_slice(&parent_bounds.to_bytes());
             }
             OrchestratorMessage::SplitConfirmation {
                 shard_id,
@@ -64,7 +80,19 @@ impl OrchestratorMessage {
                     }
                     new_shards_ids[i] = buf.get_u32_le();
                 }
-                Some(OrchestratorMessage::RequestSplit { shard_id, new_shards_ids })
+
+                if buf.remaining() < 16 {
+                    return None;
+                }
+                let mut rect_bytes = [0u8; 16];
+                buf.copy_to_slice(&mut rect_bytes);
+                let parent_bounds = Rect::from_bytes(&rect_bytes);
+
+                Some(OrchestratorMessage::RequestSplit {
+                    shard_id,
+                    new_shards_ids,
+                    parent_bounds,
+                })
             }
             TAG_SPLIT_CONFIRMATION => {
                 if buf.remaining() < 8 {

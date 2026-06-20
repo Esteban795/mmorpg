@@ -115,6 +115,7 @@ fn main() {
                 client_id,
                 x: player.x,
                 y: player.y,
+                score: 0f32,
             };
 
             if let Some(connection) = &conn {
@@ -134,13 +135,14 @@ fn main() {
             }
 
             if temp % 1000 == 0 && maxcount <= 0 {
-
-                let shard_ready_msg = BrokerMessage::ShardReady { shard_id: shard_index };
+                let shard_ready_msg = BrokerMessage::ShardReady {
+                    shard_id: shard_index,
+                };
                 shard_index += 1;
                 if let Some(connection) = &conn {
                     info!(
                         "Sending ShardReady {{ shard_id: {} }} to client {} on connection {:?}",
-                        shard_index , client_id, connection
+                        shard_index, client_id, connection
                     );
                     if let Some(ref unrel_stream) = unreliable_stream {
                         if let Err(e) = peer.send(

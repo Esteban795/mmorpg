@@ -1,8 +1,8 @@
+mod chatbox;
 mod game;
 mod loginmenu;
 mod network;
 mod state;
-mod chatbox;
 
 use bevy::prelude::*;
 use bevy_egui::EguiPlugin;
