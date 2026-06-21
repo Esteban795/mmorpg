@@ -661,10 +661,12 @@ fn broadcast_network_updates(
 
     // ============ Send client Position Updates for the Spatial Server (20Hz) And Ghost Updates to other shards ===========
     for (client_id, player_data) in &player_registry.players {
-        if player_data.state == EntityState::Ghost {
-            continue;
-        }
+        // if player_data.state == EntityState::Ghost {
+        //     continue;
+        // }
 
+        //Ghosts are included in the AOI snapshot sent to clients, so the client can know about them and render them, 
+        //but they don't send position updates to the spatial server.
         all_players.push(PlayerState {
             id: *client_id,
             username: player_data.username.clone(),
@@ -672,6 +674,11 @@ fn broadcast_network_updates(
             y: player_data.position.y,
             score: player_data.score,
         });
+
+
+        if player_data.state == EntityState::Ghost {
+        continue;
+    }
 
         let pos_update = BrokerMessage::PositionUpdate {
             client_id: *client_id,

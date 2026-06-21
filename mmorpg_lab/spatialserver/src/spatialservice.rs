@@ -13,6 +13,8 @@ use shared::rect::{Rect, Vec2};
 use shared::{MAP_BOUND_MIN, MAP_SIZE};
 
 const MARGIN: f32 = 200.0;
+const MAX_ENTITIES_PER_SHARD: usize = 10; // For testing purposes, we keep it low to trigger splits more easily. In production, this should be much higher and/or adaptative based on server performance metrics.
+
 pub struct QuicConnection {
     pub peer: GamePeer,
     pub connection: Option<game_sockets::GameConnection>,
@@ -84,7 +86,7 @@ impl SpatialService {
                 },
                 0,
                 4,
-                2,
+                MAX_ENTITIES_PER_SHARD,
                 0,
             ),
             client_shards: HashMap::new(),

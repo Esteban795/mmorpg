@@ -13,7 +13,7 @@ const BASE_PLAYER_RADIUS: f32 = 15.0;
 const BIGGER_RADIUS_THRESHOLD: f32 = 1.10;
 const SMALLER_RADIUS_THRESHOLD: f32 = 1.10;
 
-const DEFAULT_GLOBAL_MAX_BOTS: f32 = 100.0;
+const DEFAULT_GLOBAL_MAX_BOTS: f32 = 10.0;
 
 #[derive(Clone)]
 pub struct BotBrain {
@@ -159,7 +159,7 @@ fn bot_think_system(
     for (&player_id, player_data) in registry.players.iter() {
         // TO-DO : make a more robust way to identify bots instead of relying on their username starting with "Bot_". Maybe a specific flag in the PlayerData that only bots have?
         if player_data.username.starts_with("Bot_") 
-           && player_data.state == EntityState::Owned 
+           && player_data.state != EntityState::Ghost
            && !bot_registry.brains.contains_key(&player_id) {
             
             bot_registry.brains.insert(
@@ -174,7 +174,7 @@ fn bot_think_system(
 }
 
 // -------------------------------------------------------------------------
-// 1. Smart Population Manager (Prevents the QuadTree Bomb)
+// Smart Population Manager (Prevents the QuadTree Bomb)
 // -------------------------------------------------------------------------
 fn manage_bot_population(
     mut registry: ResMut<PlayerRegistry>,
