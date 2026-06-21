@@ -1,6 +1,9 @@
 mod food;
 mod heartbeat;
 mod network;
+mod ai_plugin;
+
+use ai_plugin::AiPlugin;
 
 use bevy::app::ScheduleRunnerPlugin;
 use bevy::prelude::*;
@@ -162,6 +165,7 @@ fn main() {
         .add_plugins(NetworkPlugin)
         .add_plugins(HeartbeatPlugin)
         .add_plugins(FoodPlugin)
+        .add_plugins(AiPlugin)
         .insert_resource(config)
         .insert_resource(HeartbeatSocket(socket))
         .insert_resource(NetworkManager {
