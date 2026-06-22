@@ -1,9 +1,9 @@
 use bevy::prelude::*;
 use std::collections::HashMap;
 
-use crate::network::{EntityState, PlayerData, PlayerRegistry};
-use crate::food::FoodRegistry;
 use crate::ServerConfig;
+use crate::food::FoodRegistry;
+use crate::network::{EntityState, PlayerData, PlayerRegistry};
 use shared::{MAP_BOUND_MAX, MAP_BOUND_MIN};
 
 const DEFAULT_START_BOT_ID: u32 = 2_000_000_000; // We give bots very high IDs to avoid conflicts with real players, whose IDs are assigned by the broker starting from 1 and incrementing upwards.
@@ -13,8 +13,9 @@ const BASE_PLAYER_RADIUS: f32 = 15.0;
 const BIGGER_RADIUS_THRESHOLD: f32 = 1.10;
 const SMALLER_RADIUS_THRESHOLD: f32 = 1.10;
 const DEFAULT_MAX_SPAWN_MASS: f32 = 30.0;
-const DEFAULT_SPAWN_RATE: f32 = 1.5; // How many bots to spawn per second when underpopulated
-const DEFAULT_FARWAY_THRESHOLD: f32 = 400.0; // Distance beyond which we consider players to be too far away to interact with, for optimization purposes. This should be at least the diagonal of the shard to avoid blind spots, but can be tweaked for performance if needed.
+const DEFAULT_SPAWN_RATE: f32 = 1.5; // Time interval (in seconds) between bot spawns when under capacity, can be tweaked for performance vs responsiveness.
+const DEFAULT_FARAWAY_THRESHOLD: f32 = 400.0; // Distance beyond which we consider players to be too far away to interact with, for optimization purposes. This should be at least the diagonal of the shard to avoid blind spots, but can be tweaked for performance if needed.
+const DEFAULT_SLOW_FACTOR: f32 = 0.005; // Multiplier for how much bots slow down as they grow. 
 
 const DEFAULT_GLOBAL_MAX_BOTS: f32 = 10.0;
 
@@ -37,7 +38,7 @@ impl Default for BotRegistry {
         Self {
             brains: HashMap::new(),
             next_bot_id: 0,
-            spawn_timer: Timer::from_seconds(DEFAULT_SPAWN_RATE, TimerMode::Repeating), 
+            spawn_timer: Timer::from_seconds(DEFAULT_SPAWN_RATE, TimerMode::Repeating),
         }
     }
 }
@@ -66,13 +67,12 @@ fn bot_think_system(
     // PASS 1: THINK (Read-Only on PlayerRegistry)
     // ==========================================
     for (bot_id, brain) in bot_registry.brains.iter_mut() {
-        
         // Get our bot's player data. If it doesn't exist, mark this bot for deletion and skip it.
         let Some(bot_player) = registry.players.get(bot_id) else {
             dead_bots.push(*bot_id);
             continue;
         };
-        
+
         if bot_player.state == EntityState::Ghost {
             continue;
         }
@@ -83,7 +83,7 @@ fn bot_think_system(
         if brain.repath_timer.just_finished() || brain.target_pos.is_none() {
             let my_pos = bot_player.position;
             let my_radius = BASE_PLAYER_RADIUS + bot_player.score;
-            
+
             let mut best_target = None;
             let mut highest_priority = f32::MIN;
 
@@ -96,7 +96,9 @@ fn bot_think_system(
 
                 //If the player is objectively too far away to interact with, skip them to save CPU
                 let dist = my_pos.distance(other_player.position);
-                if dist > DEFAULT_FARWAY_THRESHOLD { continue; } 
+                if dist > DEFAULT_FARAWAY_THRESHOLD {
+                    continue;
+                }
 
                 let other_radius = BASE_PLAYER_RADIUS + other_player.score;
 
@@ -104,12 +106,19 @@ fn bot_think_system(
                 //If its SMALLER_RADIUS_THRESHOLD times smaller, chase and try to eat them. We also factor in distance to prefer closer targets.
                 if other_radius > my_radius * BIGGER_RADIUS_THRESHOLD {
                     let flee_dir = (my_pos - other_player.position).normalize_or_zero();
-                    best_target = Some(my_pos + (flee_dir * 500.0));
-                    highest_priority = 1000.0 - dist; 
-                } 
-                else if my_radius > other_radius * SMALLER_RADIUS_THRESHOLD && highest_priority < 500.0 {
-                    best_target = Some(other_player.position);
-                    highest_priority = 500.0 - dist;
+                    let candidate_priority = 1000.0 - dist;
+                    if candidate_priority > highest_priority {
+                        best_target = Some(my_pos + (flee_dir * 500.0));
+                        highest_priority = candidate_priority;
+                    }
+                } else if my_radius > other_radius * SMALLER_RADIUS_THRESHOLD
+                    && highest_priority < 500.0
+                {
+                    let candidate_priority = 500.0 - dist;
+                    if candidate_priority > highest_priority {
+                        best_target = Some(other_player.position);
+                        highest_priority = candidate_priority;
+                    }
                 }
             }
 
@@ -126,7 +135,7 @@ fn bot_think_system(
                 }
             }
 
-            //If we still have nothing, just pick a random point in the shard to wander to. 
+            //If we still have nothing, just pick a random point in the shard to wander to.
             if best_target.is_none() {
                 let rx = MAP_BOUND_MIN + rand::random::<f32>() * (MAP_BOUND_MAX - MAP_BOUND_MIN);
                 let ry = MAP_BOUND_MIN + rand::random::<f32>() * (MAP_BOUND_MAX - MAP_BOUND_MIN);
@@ -149,7 +158,8 @@ fn bot_think_system(
                 }
 
                 let dir = (target - bot_player.position).normalize_or_zero();
-                let current_speed = (BASE_PLAYER_SPEED / (1.0 + (bot_player.score * 0.005))).max(1.0);
+                let current_speed =
+                    (BASE_PLAYER_SPEED / (1.0 + (bot_player.score * DEFAULT_SLOW_FACTOR))).max(1.0);
 
                 bot_player.velocity = Vec2::new(dir.x * current_speed, dir.y * current_speed);
 
@@ -165,17 +175,17 @@ fn bot_think_system(
     for id in dead_bots {
         bot_registry.brains.remove(&id);
     }
-    
+
     // ==========================================
     // PASS 3: AUTO-ADOPTION
     // ==========================================
     // If a bot just crossed the border, we need to pass it brains so it continues to function in the new shard instead of becoming a useless NPC.
     for (&player_id, player_data) in registry.players.iter() {
         // TO-DO : make a more robust way to identify bots instead of relying on their username starting with "Bot_". Maybe a specific flag in the PlayerData that only bots have?
-        if player_data.username.starts_with("Bot_") 
-           && player_data.state != EntityState::Ghost
-           && !bot_registry.brains.contains_key(&player_id) {
-            
+        if player_id >= DEFAULT_START_BOT_ID
+            && player_data.state != EntityState::Ghost
+            && !bot_registry.brains.contains_key(&player_id)
+        {
             bot_registry.brains.insert(
                 player_id,
                 BotBrain {
@@ -201,11 +211,11 @@ fn manage_bot_population(
     let mut ghost_human_count = 0;
     let mut bot_count = 0;
 
-for (&id, player_data) in registry.players.iter() {
+    for (&id, player_data) in registry.players.iter() {
         if id >= DEFAULT_START_BOT_ID {
-            //Only count owned bots, global bot count is managed mathematically using the local_bot_cap
-            if player_data.state == EntityState::Owned {
-                bot_count += 1; 
+            //Only count non-ghost bots (so owned & pending handoff), global bot count is managed mathematically using the local_bot_cap
+            if player_data.state != EntityState::Ghost {
+                bot_count += 1;
             }
         } else {
             if player_data.state == EntityState::Ghost {
@@ -230,12 +240,10 @@ for (&id, player_data) in registry.players.iter() {
         // Apply "Crowd Pressure": Every 1 human takes up the space of 3 bots.
         let human_pressure = (human_count as f32) * 3.0;
         (local_bot_cap - human_pressure).max(0.0) as usize
-
     } else if ghost_human_count > 0 {
         // WATCHED: Shard is empty, but a player is in the margin looking across the border!
         // Ramp capacity to 50% so they see an active ecosystem.
         (local_bot_cap * 0.50).max(0.0) as usize
-
     } else {
         // DORMANT: Deep in the map, completely out of sight.
         // Maintain a tiny 15% ambient population.
@@ -246,8 +254,8 @@ for (&id, player_data) in registry.players.iter() {
 
     // SPAWN: Smoothly spawn 1 bot per tick if we are under target
     if bot_count < target_bots && bot_registry.spawn_timer.just_finished() {
-        let base_id = DEFAULT_START_BOT_ID + (config.id * 1_000_000);
-        let bot_id = base_id + bot_registry.next_bot_id;
+        let base_id = DEFAULT_START_BOT_ID.wrapping_add(config.id.wrapping_mul(1_000_000));
+        let bot_id = base_id.wrapping_add(bot_registry.next_bot_id);
         bot_registry.next_bot_id = bot_registry.next_bot_id.wrapping_add(1);
 
         let spawn_x = config.bounds.x + (rand::random::<f32>() * config.bounds.width);
@@ -272,7 +280,7 @@ for (&id, player_data) in registry.players.iter() {
             },
         );
     }
-    
+
     // CULLING: Aggressively despawn bots if humans flood the shard
     if bot_count > target_bots + 2 {
         // bot_registry.brains ONLY tracks bots we currently Own.
