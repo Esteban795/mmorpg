@@ -83,6 +83,10 @@ cargo run -p spatialserver
 cargo run -p gatekeeper
 ```
 
+```
+cargo run -p chat
+```
+
 Then run every client you want in seperate terminals
 
 ```

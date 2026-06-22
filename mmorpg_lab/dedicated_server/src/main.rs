@@ -1,6 +1,9 @@
 mod food;
 mod heartbeat;
 mod network;
+mod ai_plugin;
+
+use ai_plugin::AiPlugin;
 
 use bevy::app::ScheduleRunnerPlugin;
 use bevy::prelude::*;
@@ -19,7 +22,7 @@ use shared::{DEFAULT_ORCH_HEARTBEAT_PORT, DEFAULT_ORCHESTRATOR_ADDR};
 
 const DEFAULT_DS_PORT: &str = "8001";
 const DEFAULT_ZONE: &str = "shard:0";
-const DEFAULT_MAX_PLAYERS: &str = "2";
+const DEFAULT_MAX_PLAYERS: &str = "50";
 const DEFAULT_SHARD_ID: u32 = 0;
 
 use crate::heartbeat::ShardId;
@@ -162,6 +165,7 @@ fn main() {
         .add_plugins(NetworkPlugin)
         .add_plugins(HeartbeatPlugin)
         .add_plugins(FoodPlugin)
+        .add_plugins(AiPlugin)
         .insert_resource(config)
         .insert_resource(HeartbeatSocket(socket))
         .insert_resource(NetworkManager {
