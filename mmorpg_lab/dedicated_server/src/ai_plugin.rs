@@ -14,6 +14,7 @@ const BIGGER_RADIUS_THRESHOLD: f32 = 1.10;
 const SMALLER_RADIUS_THRESHOLD: f32 = 1.10;
 const DEFAULT_MAX_SPAWN_MASS: f32 = 30.0;
 const DEFAULT_SPAWN_RATE: f32 = 1.5; // How many bots to spawn per second when underpopulated
+const DEFAULT_FARWAY_THRESHOLD: f32 = 400.0; // Distance beyond which we consider players to be too far away to interact with, for optimization purposes. This should be at least the diagonal of the shard to avoid blind spots, but can be tweaked for performance if needed.
 
 const DEFAULT_GLOBAL_MAX_BOTS: f32 = 10.0;
 
@@ -95,7 +96,7 @@ fn bot_think_system(
 
                 //If the player is objectively too far away to interact with, skip them to save CPU
                 let dist = my_pos.distance(other_player.position);
-                if dist > 400.0 { continue; } 
+                if dist > DEFAULT_FARWAY_THRESHOLD { continue; } 
 
                 let other_radius = BASE_PLAYER_RADIUS + other_player.score;
 
