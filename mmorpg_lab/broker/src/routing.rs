@@ -5,8 +5,7 @@ use crate::state::BrokerState;
 use crate::state::Topic;
 use bevy::prelude::*;
 use bytes::Bytes;
-use game_sockets::GameConnection;
-use game_sockets::{GameNetworkEvent, GameStream};
+use game_sockets::{GameConnection,GameNetworkEvent, GameStream};
 use shared::broker_protocol::{
     BrokerMessage, TAG_CLIENT_TYPE_CHAT_SERVICE, TAG_CLIENT_TYPE_CLIENT,
     TAG_CLIENT_TYPE_SPATIAL_SERVER, string_to_topic, topic_to_string,
