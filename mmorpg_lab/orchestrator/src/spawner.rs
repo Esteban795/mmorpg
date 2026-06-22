@@ -7,7 +7,7 @@ use tracing::{error, info};
 
 //Settings for the spawner. Adjust as needed for testing or production.
 // const HOT_SERVERS_MIN: usize = 1;
-const MAX_PLAYERS_PER_SERVER: u16 = 2;
+const MAX_PLAYERS_PER_SERVER: u16 = 50;
 const STARTING_PORT: u16 = 8001;
 const MAX_PORT: u16 = 9000;
 // const TICKING_INTERVAL_SECS: u64 = 5;

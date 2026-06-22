@@ -12,6 +12,8 @@ const BASE_PLAYER_SPEED: f32 = 5.0; // Match the ones in network.rs
 const BASE_PLAYER_RADIUS: f32 = 15.0;
 const BIGGER_RADIUS_THRESHOLD: f32 = 1.10;
 const SMALLER_RADIUS_THRESHOLD: f32 = 1.10;
+const DEFAULT_MAX_SPAWN_MASS: f32 = 30.0;
+const DEFAULT_SPAWN_RATE: f32 = 1.5; // How many bots to spawn per second when underpopulated
 
 const DEFAULT_GLOBAL_MAX_BOTS: f32 = 10.0;
 
@@ -21,11 +23,22 @@ pub struct BotBrain {
     pub target_pos: Option<Vec2>,
 }
 
-#[derive(Resource, Default)]
+#[derive(Resource)]
 pub struct BotRegistry {
     // Maps the bot's unique client_id to its brain
     pub brains: HashMap<u32, BotBrain>,
     pub next_bot_id: u32,
+    pub spawn_timer: Timer,
+}
+
+impl Default for BotRegistry {
+    fn default() -> Self {
+        Self {
+            brains: HashMap::new(),
+            next_bot_id: 0,
+            spawn_timer: Timer::from_seconds(DEFAULT_SPAWN_RATE, TimerMode::Repeating), 
+        }
+    }
 }
 
 pub struct AiPlugin;
@@ -180,47 +193,62 @@ fn manage_bot_population(
     mut registry: ResMut<PlayerRegistry>,
     mut bot_registry: ResMut<BotRegistry>,
     config: Res<ServerConfig>,
+    time: Res<Time>,
 ) {
-    // Count how many humans and bots are currently in this specific shard
+    //Count entities and classify their states
     let mut human_count = 0;
+    let mut ghost_human_count = 0;
     let mut bot_count = 0;
 
-    for &id in registry.players.keys() {
+for (&id, player_data) in registry.players.iter() {
         if id >= DEFAULT_START_BOT_ID {
-            bot_count += 1;
+            //Only count owned bots, global bot count is managed mathematically using the local_bot_cap
+            if player_data.state == EntityState::Owned {
+                bot_count += 1; 
+            }
         } else {
-            human_count += 1;
+            if player_data.state == EntityState::Ghost {
+                ghost_human_count += 1; // A player from a neighbor shard is looking at us
+            } else {
+                human_count += 1; // A player is fully inside our shard
+            }
         }
     }
 
-    // SLEEP MODE: If there are no real players here, do not spawn new bots.
-    // This saves massive amounts of CPU on empty shards.
-    if human_count == 0 {
-        return;
-    }
-
-    // Calculate safe capacity based on map area
+    // Calculate baseline capacity based on physical shard area
     let total_area = shared::MAP_SIZE * shared::MAP_SIZE;
     let shard_area = config.bounds.width * config.bounds.height;
     let area_ratio = shard_area / total_area;
 
-    let max_global_bots = DEFAULT_GLOBAL_MAX_BOTS; // The absolute maximum bots allowed across the ENTIRE MMO
-    let local_bot_cap = (max_global_bots * area_ratio).ceil() as usize;
+    let max_global_bots = DEFAULT_GLOBAL_MAX_BOTS;
+    let local_bot_cap = (max_global_bots * area_ratio).ceil() as f32;
 
-    // More players = fewer bots. 
-    let target_bots = if human_count >= local_bot_cap {
-        0 
+    // Determine target bot population based on player presence and apply "Crowd Pressure" mechanics
+    let target_bots = if human_count > 0 {
+        // ACTIVE: Players are here.
+        // Apply "Crowd Pressure": Every 1 human takes up the space of 3 bots.
+        let human_pressure = (human_count as f32) * 3.0;
+        (local_bot_cap - human_pressure).max(0.0) as usize
+
+    } else if ghost_human_count > 0 {
+        // WATCHED: Shard is empty, but a player is in the margin looking across the border!
+        // Ramp capacity to 50% so they see an active ecosystem.
+        (local_bot_cap * 0.50).max(0.0) as usize
+
     } else {
-        local_bot_cap - human_count
+        // DORMANT: Deep in the map, completely out of sight.
+        // Maintain a tiny 15% ambient population.
+        (local_bot_cap * 0.15).max(0.0) as usize
     };
 
-    // SPAWN: If we are under target, spawn ONE bot per tick to avoid lag spikes
-    if bot_count < target_bots {
+    bot_registry.spawn_timer.tick(time.delta());
+
+    // SPAWN: Smoothly spawn 1 bot per tick if we are under target
+    if bot_count < target_bots && bot_registry.spawn_timer.just_finished() {
         let base_id = DEFAULT_START_BOT_ID + (config.id * 1_000_000);
         let bot_id = base_id + bot_registry.next_bot_id;
         bot_registry.next_bot_id = bot_registry.next_bot_id.wrapping_add(1);
 
-        //Choose a random spawn position within the shard bounds for the new bot to avoid them all spawning in the same spot and eating each others.
         let spawn_x = config.bounds.x + (rand::random::<f32>() * config.bounds.width);
         let spawn_y = config.bounds.y + (rand::random::<f32>() * config.bounds.height);
 
@@ -231,7 +259,7 @@ fn manage_bot_population(
                 position: Vec2::new(spawn_x, spawn_y),
                 velocity: Vec2::new(0.0, 0.0),
                 state: EntityState::Owned,
-                score: rand::random::<f32>() * 50.0, // Random initial score to create some variety in bot sizes
+                score: rand::random::<f32>() * DEFAULT_MAX_SPAWN_MASS, // Reduced max spawn mass so they don't instakill
             },
         );
 
@@ -244,9 +272,9 @@ fn manage_bot_population(
         );
     }
     
-    // CULLING: If a shard split caused this area to have too many bots,
-    // we peacefully remove one per tick until we are back under the cap.
+    // CULLING: Aggressively despawn bots if humans flood the shard
     if bot_count > target_bots + 2 {
+        // bot_registry.brains ONLY tracks bots we currently Own.
         if let Some(&bot_id) = bot_registry.brains.keys().next() {
             bot_registry.brains.remove(&bot_id);
             registry.players.remove(&bot_id);

@@ -22,7 +22,7 @@ use shared::{DEFAULT_ORCH_HEARTBEAT_PORT, DEFAULT_ORCHESTRATOR_ADDR};
 
 const DEFAULT_DS_PORT: &str = "8001";
 const DEFAULT_ZONE: &str = "shard:0";
-const DEFAULT_MAX_PLAYERS: &str = "2";
+const DEFAULT_MAX_PLAYERS: &str = "50";
 const DEFAULT_SHARD_ID: u32 = 0;
 
 use crate::heartbeat::ShardId;
